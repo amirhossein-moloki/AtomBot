@@ -1,0 +1,2090 @@
+{
+  "name": "SeoGodFinal",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "2075065850",
+        "text": "🚀 پردازش 9 منبع خبری آغاز شد...",
+        "additionalFields": {}
+      },
+      "name": "Send Initial Status",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -4160,
+        1920
+      ],
+      "id": "2b3562e2-7aaf-4848-9778-a3614ea56a47",
+      "webhookId": "fd181777-91e2-4f9a-9ad1-779f6ce3c151",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 10,
+              "unit": "minutes"
+            }
+          ]
+        }
+      },
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -4608,
+        1920
+      ],
+      "id": "91ad32d8-4541-4341-93d8-6c2c1b4802d5"
+    },
+    {
+      "parameters": {
+        "functionCode": "const sources = [\n  {source:'GameSpot',  url:'https://www.gamespot.com/feeds/news'},\n  {source:'Kotaku',    url:'https://kotaku.com/feed'},\n  {source:'PCGamer',   url:'https://www.pcgamer.com/rss/'},\n  {source:'Polygon',   url:'https://www.polygon.com/rss/polygon-archives/index.xml'},\n  {source:'Eurogamer', url:'https://www.eurogamer.net/feed'},\n  {source:'VG247',     url:'https://www.vg247.com/feed'},\n  {source:'Gematsu',   url:'https://www.gematsu.com/feed'},\n  {source:'XboxWire',  url:'https://news.xbox.com/en-us/feed/'},\n  {source:'GamesPress',url:'https://www.gamespress.com/en-gb/News/RSS'}\n];\n\nconst message_id = $items()[0].json.result.message_id;\n\nreturn sources.map((item, index) => {\n  return {\n    json: {\n      ...item,\n      message_id: message_id,\n      itemIndex: index\n    }\n  };\n});"
+      },
+      "name": "Prepare Sources & Add IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -3936,
+        1920
+      ],
+      "id": "6a278b90-d8ba-4a78-96ce-8f499213d201"
+    },
+    {
+      "parameters": {
+        "batchSize": 8,
+        "options": {}
+      },
+      "name": "Split Sources",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -3712,
+        1920
+      ],
+      "id": "8c87c552-3660-43e5-ae0d-96d08705a472"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "options": {}
+      },
+      "name": "RSS Feed Read",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -3488,
+        1856
+      ],
+      "id": "fa166524-4167-499a-95d4-d1972485e687",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "functionCode": "const parentData = $items('Split Sources')[0].json;\n\nif (items.length === 0) {\n  return [{ json: { ...parentData, success: false } }];\n}\n\nreturn items.map((article) => {\n  return {\n    json: {\n      ...article.json,\n      source: parentData.source,\n      message_id: parentData.message_id,\n      itemIndex: parentData.itemIndex,\n      success: true,\n    },\n  };\n});"
+      },
+      "name": "Tag Success/Fail",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -3264,
+        1856
+      ],
+      "id": "4c2014f9-f103-424e-85a7-119bf6a9267e"
+    },
+    {
+      "parameters": {
+        "functionCode": "const parentData = $items('Split Sources')[0].json;\n\nconst anySuccess = items.some(i => i.json && i.json.success === true);\n\nreturn [{\n  json: {\n    source: parentData.source,\n    success: anySuccess,\n    message_id: parentData.message_id,\n    itemIndex: parentData.itemIndex\n  }\n}];"
+      },
+      "name": "Status Per Source",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -3040,
+        2144
+      ],
+      "id": "aad80804-f8d1-4860-8ded-2df9a16ebf60"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.message_id}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "If Has MsgID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2816,
+        2208
+      ],
+      "id": "24d4bbdb-4a78-408f-a74f-ae017498ba3c"
+    },
+    {
+      "parameters": {},
+      "name": "Wait for Loop to Finish",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -3040,
+        1760
+      ],
+      "id": "135cef7c-6fd5-4d02-bea3-8b3b13ddab2b"
+    },
+    {
+      "parameters": {
+        "functionCode": "// This node now receives a complete list of all articles from the Merge node.\n// No need for $items() anymore.\nconst allItems = items;\n\nconst firstValidItem = allItems.find(i => i.json && i.json.message_id);\nconst messageId = firstValidItem ? firstValidItem.json.message_id : null;\n\nconst validArticles = allItems.filter(i => i.json && i.json.success && i.json.title);\n\nconst seen = new Set();\nconst uniqueArticles = validArticles.filter(item => {\n  const key = item.json.link || item.json.title;\n  if (seen.has(key)) {\n    return false;\n  } else {\n    seen.add(key);\n    return true;\n  }\n});\n\nconst finalArticles = uniqueArticles.map(item => {\n  const json = item.json;\n  return {\n    title: json.title || \"بدون عنوان\",\n    link: json.link || \"#\",\n    source: json.source || \"نامشخص\",\n    rawContent: json.contentSnippet || json.content || \"\"\n  };\n});\n\nreturn [{\n  json: {\n    articles: finalArticles,\n    messageId: messageId\n  }\n}];"
+      },
+      "name": "Filter & Prepare All Articles",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -2816,
+        1760
+      ],
+      "id": "dd5b0fee-efbd-4faa-b404-aba449eecb6b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Check for Prep Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2592,
+        1952
+      ],
+      "id": "9395a072-4b1a-4bb4-b9d4-36c50425856c"
+    },
+    {
+      "parameters": {
+        "chatId": "2075065850",
+        "text": "={{ `❌ خطای نهایی:\n${$json.errorMessage}` }}",
+        "additionalFields": {}
+      },
+      "name": "Send Error to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -2368,
+        1952
+      ],
+      "id": "dcadeb42-228d-4133-a21a-031f7705bdfc",
+      "webhookId": "b476a619-cc38-4885-9ab6-ded07a82ccd6",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.articles.length}}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "name": "If Articles Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2592,
+        1664
+      ],
+      "id": "8e140161-9bad-4e39-bf6d-a4a4c8c43f25"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "2075065850",
+        "messageId": "={{$json.messageId}}",
+        "text": "✅ پردازش کامل شد. مقاله جدیدی برای خلاصه‌سازی یافت نشد.",
+        "additionalFields": {}
+      },
+      "name": "Update Final Status (No Articles)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -2368,
+        1760
+      ],
+      "id": "6601e28d-c8e1-42dd-b3db-f71b413de35d",
+      "webhookId": "97de5891-6192-4a04-9c9f-a921d44114d5",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://atom-game.ir/api/blog/posts/",
+        "options": {}
+      },
+      "name": "Get Recent Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2368,
+        1568
+      ],
+      "id": "72d4d938-7edc-4b1c-81b5-445107a028da"
+    },
+    {
+      "parameters": {
+        "functionCode": "// انتظار داریم این نود بعد از \"Get Recent Posts\" اجرا شود.\nconst data = $json || {};\nconst results = Array.isArray(data.results) ? data.results : [];\n\nconst tagScores = {};\nconst categoryScores = {};\nconst TOTAL_WEIGHT_VIEWS = 1;\nconst TOTAL_WEIGHT_LIKES = 10;\nconst TOTAL_WEIGHT_COMMENTS = 20;\n\nfor (const post of results) {\n  const views = Number(post.views_count || 0);\n  const likes = Number(post.likes_count || 0);\n  const comments = Number(post.comments_count || 0);\n  const score = views * TOTAL_WEIGHT_VIEWS + likes * TOTAL_WEIGHT_LIKES + comments * TOTAL_WEIGHT_COMMENTS;\n\n  if (Array.isArray(post.tags)) {\n    for (const tag of post.tags) {\n      const key = tag.slug || tag.name || '';\n      if (!key) continue;\n      tagScores[key] = (tagScores[key] || 0) + score;\n    }\n  }\n\n  const cat = post.category;\n  if (cat) {\n    categoryScores[cat] = (categoryScores[cat] || 0) + score;\n  }\n}\n\nfunction topEntries(obj, limit = 5) {\n  return Object.entries(obj)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, limit)\n    .map(([key, score]) => ({ key, score }));\n}\n\nconst topTags = topEntries(tagScores, 7);\nconst topCategories = topEntries(categoryScores, 5);\n\nconst lines = [];\nif (topTags.length) {\n  lines.push('تگ‌های پربازدید اخیر:');\n  for (const t of topTags) {\n    lines.push(`- ${t.key} (امتیاز تقریبی: ${t.score})`);\n  }\n  lines.push('');\n}\n\nif (topCategories.length) {\n  lines.push('دسته‌بندی‌های پربازدید اخیر:');\n  for (const c of topCategories) {\n    lines.push(`- ${c.key} (امتیاز تقریبی: ${c.score})`);\n  }\n  lines.push('');\n}\n\nif (!lines.length) {\n  lines.push('داده کافی برای تحلیل سئو وجود ندارد.');\n}\n\nreturn [{\n  json: {\n    seo_insights: {\n      top_tags: topTags,\n      top_categories: topCategories\n    },\n    seo_summary_text: lines.join('\\n')\n  }\n}];\n"
+      },
+      "name": "Analyze SEO Performance",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -2144,
+        1568
+      ],
+      "id": "28801642-9a29-435c-aaba-55a394c5c715"
+    },
+    {
+      "parameters": {
+        "functionCode": "const seo = $json || {};\n\nreturn [{\n  json: {\n    memory_context: {\n      seo_summary_text: seo.seo_summary_text || '',\n      seo_insights: seo.seo_insights || {}\n    }\n  }\n}];\n"
+      },
+      "name": "AI Memory Builder",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1920,
+        1568
+      ],
+      "id": "cf18a5ac-171b-4196-a3b6-4ccdc029f777"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={\n  \"chosen_index\": 0,\n  \"chosen_link\": \"\",\n  \"reason\": `\nتو یک استراتژیست سئو برای وبلاگ بازی‌های ویدیویی atom-game.ir هستی و در این نسخه فقط وظیفهٔ «انتخاب خبر» را داری، نه تولید محتوا.\n\nحافظهٔ کوتاه‌مدت تو از عملکرد سئو (memory_context):\n${JSON.stringify($items(\"AI Memory Builder\")[0].json.memory_context || {}, null, 2)}\n\nآمار عملکرد سئو در پست‌های اخیر (بر اساس بازدید، لایک و کامنت):\n${$items(\"AI Memory Builder\")[0].json.memory_context?.seo_summary_text || $items(\"Analyze SEO Performance\")[0].json.seo_summary_text || 'آماری در دسترس نیست.'}\n\nماموریت تو:\n1) از بین خبرهای زیر، فقط و فقط 1 خبر را انتخاب کن که:\n   - پتانسیل بالای سرچ در گوگل داشته باشد (ترندتر/جذاب‌تر/بحث‌برانگیزتر)\n   - برای گیمرها (PC, PlayStation, Xbox, Nintendo, موبایل) جذاب باشد\n   - برای نوشتن یک پست وبلاگی منسجم مناسب باشد\n2) هیچ محتوا یا عنوان یا سئو تولید نکن. فقط انتخاب کن.\n3) خروجی تو باید فقط و فقط یک JSON معتبر باشد و هیچ متن دیگری نداشته باشد، دقیقاً با این ساختار:\n\n{\n  \"chosen_index\": 0,\n  \"chosen_link\": \"https://example.com/article\",\n  \"reason\": \"یک یا دو جمله کوتاه درباره اینکه چرا این خبر بهترین گزینه است\"\n}\n\nقوانین:\n- chosen_index باید اندیس عددی همان خبری باشد که از بین لیست انتخاب می‌کنی (شروع از 0).\n- chosen_link باید دقیقاً لینک همان خبر انتخاب‌شده باشد (لینکی که در لیست کنار همان شاخص آمده).\n- اگر به هر دلیل نتوانستی انتخاب کنی، به صورت پیش‌فرض chosen_index = 0 و chosen_link همان لینک شاخص 0 باشد.\n- فقط از همین لیست انتخاب کن و هیچ لینک دیگری نساز.\n\nلیست خبرها:\n${$items(\"Filter & Prepare All Articles\")[0].json.articles.map((a, index) =>\n  `شاخص: ${index}\nعنوان: ${a.title}\nمنبع: ${a.source}\nلینک: ${a.link}\nمحتوا: ${a.rawContent || ''}`\n).join(\"\\n---\\n\")}\n`\n}\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -1696,
+        1568
+      ],
+      "id": "fdf86614-eddc-4d2c-ac51-0fae5303df2b",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1632,
+        1792
+      ],
+      "id": "bf3f6a7d-2e94-4180-8e9e-0abd9f37aaf5",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YtU7J5m2EweUzwOC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "let { summary_markdown, seo_description } = $json;\n\n// --- NEW: اگر summary_markdown اشتباهاً داخل ```json ...``` یک JSON کامل بود، استخراج و جایگزین کن\nfunction unwrapJsonFromMarkdownFence(s) {\n  if (typeof s !== 'string') return null;\n\n  const trimmed = s.trim();\n\n  // حالت: کل متن داخل کدبلاک ```json ... ```\n  const fenced = trimmed.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/i);\n  const candidate = (fenced ? fenced[1] : trimmed).trim();\n\n  // اگر candidate خودش یک آبجکت JSON بود، همون رو parse کن\n  const start = candidate.indexOf('{');\n  const end = candidate.lastIndexOf('}');\n  if (start === -1 || end === -1 || end <= start) return null;\n\n  const jsonText = candidate.slice(start, end + 1);\n\n  try {\n    const obj = JSON.parse(jsonText);\n    // اگر خروجی AI این ساختار رو داشت، فیلدها رو اصلاح کن\n    if (obj && typeof obj === 'object') {\n      return obj;\n    }\n  } catch (e) {\n    return null;\n  }\n  return null;\n}\n\nconst extracted = unwrapJsonFromMarkdownFence(summary_markdown);\nif (extracted) {\n  // اگر AI اشتباهاً JSON رو گذاشته تو summary_markdown، فیلدها رو ازش بیرون بکش\n  summary_markdown = extracted.summary_markdown ?? summary_markdown;\n  seo_description = extracted.seo_description ?? seo_description;\n  // اگر title/seo_title/tags/... هم اومده بود، روی item هم اعمالش کن\n  for (const k of [\n    'title','title_variants','excerpt','seo_title','category_slug','series_slug',\n    'tags','focus_keywords','chosen_index','reason','selection_reason'\n  ]) {\n    if (extracted[k] !== undefined) $json[k] = extracted[k];\n  }\n}\n\n// --- ORIGINAL LOGIC\nfunction cleanUrl(u) {\n  try {\n    const url = new URL(u);\n    const badParams = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','fbclid','gclid','ref'];\n    badParams.forEach(p => url.searchParams.delete(p));\n    return url.toString();\n  } catch (e) {\n    return u;\n  }\n}\n\nsummary_markdown = summary_markdown || '';\nseo_description = seo_description || '';\n\nconst urlRegex = /(https?:\\/\\/[^\\s)]+[^\\s)\\.,!?])/g;\nsummary_markdown = summary_markdown.replace(urlRegex, (m) => cleanUrl(m));\nseo_description = seo_description.replace(urlRegex, (m) => cleanUrl(m));\n\nconst ytRegex = /(https?:\\/\\/(?:www\\.)?(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/)([A-Za-z0-9_-]{6,}))/g;\nsummary_markdown = summary_markdown.replace(ytRegex, (match, url, vid) => {\n  const id = vid;\n  return `\\n<iframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/${id}\" frameborder=\"0\" allowfullscreen></iframe>\\n`;\n});\n\nconst textForLang = (summary_markdown || seo_description || '').slice(0, 1000);\nconst hasArabic = /[\\u0600-\\u06FF]/.test(textForLang);\nconst lang = hasArabic ? 'fa' : 'en';\n\nreturn [{\n  json: {\n    ...$json,\n    summary_markdown,\n    seo_description,\n    lang\n  }\n}];\n"
+      },
+      "name": "Clean URLs & Enhance Content",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        128,
+        1568
+      ],
+      "id": "3adaed04-33fb-4d8e-9458-84c0887df436"
+    },
+    {
+      "parameters": {
+        "functionCode": "const fetched = $items(\"Fetch Original Article HTML1\")[0].json;\n\n// html\nconst body = fetched.body || fetched.data || fetched;\nconst text = typeof body === \"string\" ? body : JSON.stringify(body);\n\n// base url\nconst baseUrl =\n  fetched.url ||\n  fetched.pageUrl ||\n  fetched.source_url ||\n  fetched.sourceUrl ||\n  fetched.post?.source_url ||\n  fetched.post?.sourceUrl ||\n  \"\";\n\n// ---- helpers ----\nconst absolutize = (src) => {\n  try {\n    if (!src) return \"\";\n    let s = String(src).trim();\n    if (!s) return \"\";\n    if (s.includes(\"<%\") || s.includes(\"%>\")) return \"\";\n    if (s.startsWith(\"data:\")) return \"\";\n    if (s.startsWith(\"blob:\")) return \"\";\n    if (s.startsWith(\"javascript:\")) return \"\";\n    if (s.startsWith(\"mailto:\")) return \"\";\n    if (s.startsWith(\"tel:\")) return \"\";\n    if (s.startsWith(\"//\")) s = \"https:\" + s;\n\n    if (!/^https?:\\/\\//i.test(s)) {\n      if (!baseUrl) return \"\";\n      s = new URL(s, baseUrl).toString();\n    }\n\n    if (s.includes(\"scorecardresearch.com\")) return \"\";\n    return s;\n  } catch {\n    return \"\";\n  }\n};\n\nconst pickBestFromSrcset = (srcset) => {\n  const parts = String(srcset)\n    .split(\",\")\n    .map((x) => x.trim().split(/\\s+/)[0])\n    .filter(Boolean);\n  return parts.length ? parts[parts.length - 1] : \"\";\n};\n\nconst uniq = (arr) => {\n  const seen = new Set();\n  return arr.filter((u) => (u && !seen.has(u) ? (seen.add(u), true) : false));\n};\n\nconst getExtFromUrl = (u) => {\n  try {\n    const clean = u.split(\"?\")[0].split(\"#\")[0];\n    const m = clean.match(/\\.([a-z0-9]+)$/i);\n    const ext = (m?.[1] || \"jpg\").toLowerCase();\n    if (![\"jpg\", \"jpeg\", \"png\", \"webp\", \"avif\", \"gif\", \"bmp\", \"tiff\"].includes(ext)) return \"jpg\";\n    return ext === \"jpeg\" ? \"jpg\" : ext;\n  } catch {\n    return \"jpg\";\n  }\n};\n\nconst slugifyEn = (s) => {\n  const str = String(s || \"\").trim().toLowerCase();\n  let out = str\n    .replace(/&/g, \" and \")\n    .replace(/[^a-z0-9\\s-]/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim()\n    .replace(/\\s/g, \"-\")\n    .replace(/-+/g, \"-\");\n\n  out = out\n    .split(\"-\")\n    .filter((w) => w && ![\"the\", \"a\", \"an\", \"of\", \"to\", \"in\", \"on\", \"for\", \"and\"].includes(w))\n    .join(\"-\");\n\n  return out || \"\";\n};\n\nconst pad2 = (n) => String(n).padStart(2, \"0\");\n\nconst safeText = (s) =>\n  String(s || \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n\nconst stripTags = (html) =>\n  String(html || \"\")\n    .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, \" \")\n    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, \" \")\n    .replace(/<\\/?[^>]+>/g, \" \");\n\nconst decodeEntitiesLite = (s) =>\n  String(s || \"\")\n    .replace(/&nbsp;/gi, \" \")\n    .replace(/&amp;/gi, \"&\")\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/gi, \"'\")\n    .replace(/&lt;/gi, \"<\")\n    .replace(/&gt;/gi, \">\");\n\n// ✅ NEW: helpers برای استخراج عنوان مقاله از HTML هم\nconst pickFirst = (...vals) => {\n  for (const v of vals) {\n    if (v === null || v === undefined) continue;\n    if (typeof v === \"string\" && !v.trim()) continue;\n    return v;\n  }\n  return \"\";\n};\n\nconst parseHtmlTitle = (html) => {\n  const m = /<title[^>]*>([\\s\\S]*?)<\\/title>/i.exec(String(html || \"\"));\n  return m?.[1] || \"\";\n};\n\nconst parseMetaTitle = (html) => {\n  const h = String(html || \"\");\n  const m =\n    /<meta[^>]+property=[\"']og:title[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i.exec(h) ||\n    /<meta[^>]+name=[\"']twitter:title[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i.exec(h);\n  return m?.[1] || \"\";\n};\n\nconst parseFirstH1 = (html) => {\n  const m = /<h1\\b[^>]*>([\\s\\S]*?)<\\/h1>/i.exec(String(html || \"\"));\n  return m?.[1] || \"\";\n};\n\nconst sanitizeHeadingForHint = (h) => {\n  const t = safeText(decodeEntitiesLite(stripTags(h))).slice(0, 80);\n  // برای filename، فقط نسخه انگلیسی ساده نگه می‌داریم (فارسی را در alt نگه می‌داریم)\n  const en = t\n    .toLowerCase()\n    .replace(/&/g, \" and \")\n    .replace(/[^a-z0-9\\s-]/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim()\n    .replace(/\\s/g, \"-\")\n    .replace(/-+/g, \"-\");\n  return en || \"\";\n};\n\nconst getUrlHint = (url) => {\n  try {\n    const u = new URL(url);\n    const last = u.pathname.split(\"/\").filter(Boolean).pop() || \"\";\n    const base = last.split(\".\")[0] || \"\";\n    // حذف id عددی ابتدای اسم (مثل 4583334-foo)\n    const cleaned = base.replace(/^[0-9]+-/, \"\");\n    const hint = cleaned\n      .toLowerCase()\n      .replace(/%[0-9a-f]{2}/gi, \"-\")\n      .replace(/[^a-z0-9]+/g, \"-\")\n      .replace(/-+/g, \"-\")\n      .replace(/^-|-$/g, \"\")\n      .slice(0, 40);\n    return hint || \"\";\n  } catch {\n    return \"\";\n  }\n};\n\nconst getNearContext = (full, pos, beforeLen = 220, afterLen = 220) => {\n  const start = Math.max(0, pos - beforeLen);\n  const end = Math.min(full.length, pos + afterLen);\n  const before = safeText(decodeEntitiesLite(stripTags(full.slice(start, pos))));\n  const after = safeText(decodeEntitiesLite(stripTags(full.slice(pos, end))));\n  return {\n    contextBefore: before.slice(-180),\n    contextAfter: after.slice(0, 180),\n  };\n};\n\nconst findNearestHeading = (full, pos) => {\n  // پنجره‌ی قبل از تصویر\n  const windowStart = Math.max(0, pos - 4000);\n  const chunk = full.slice(windowStart, pos);\n\n  // آخرین H2/H3/H1 نزدیک را پیدا کن\n  const headingRegex = /<(h1|h2|h3)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/gi;\n  let m;\n  let last = null;\n  while ((m = headingRegex.exec(chunk)) !== null) last = m;\n\n  if (!last) return { nearestHeading: \"\", nearestHeadingLevel: \"\" };\n\n  const level = (last[1] || \"\").toLowerCase();\n  const raw = last[2] || \"\";\n  const clean = safeText(decodeEntitiesLite(stripTags(raw)));\n\n  return { nearestHeading: clean, nearestHeadingLevel: level };\n};\n\n// ---- derive postSlug & title/titleFromInputs ----\n// مهم: title/slug ممکنه داخل post یا data باشد\nconst inputSlug =\n  $json.slug ||\n  $json.post?.slug ||\n  $json.data?.slug ||\n  $json.item?.slug ||\n  \"\";\n\n// ✅ UPDATED: عنوان را هم از JSON هم از HTML استخراج کن\nconst inputTitle = pickFirst(\n  $json.title,\n  $json.post?.title,\n  $json.data?.title,\n  $json.item?.title,\n\n  // fallback از داخل HTML:\n  safeText(decodeEntitiesLite(stripTags(parseMetaTitle(text)))),\n  safeText(decodeEntitiesLite(stripTags(parseHtmlTitle(text)))),\n  safeText(decodeEntitiesLite(stripTags(parseFirstH1(text))))\n);\n\n// اگر slug خراب/ناقص بود، از عنوان انگلیسی slug بساز\nlet postSlug = inputSlug && !/^a(-a)+$/i.test(inputSlug) ? inputSlug : \"\";\nif (!postSlug) postSlug = slugifyEn(inputTitle);\n\n// fallback اگر هیچی نبود\nif (!postSlug) {\n  const d = new Date();\n  postSlug = `post-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;\n}\n\nconst titleForAlt = safeText(inputTitle) || postSlug.replace(/-/g, \" \");\n\n// ---- IMAGES extraction (با کانتکست/heading/alt) ----\nconst metaImageRegexes = [\n  /<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i,\n  /<meta[^>]+name=[\"']twitter:image[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i,\n  /\"thumbnailUrl\"\\s*:\\s*\"([^\"]+)\"/i,\n  /\"image\"\\s*:\\s*\\{[^}]*\"url\"\\s*:\\s*\"([^\"]+)\"/i,\n];\n\nlet mainImage = \"\";\nfor (const r of metaImageRegexes) {\n  const m = r.exec(text);\n  const u = absolutize(m?.[1]);\n  if (u && !u.toLowerCase().includes(\"/blank_\")) {\n    mainImage = u;\n    break;\n  }\n}\n\nconst imgTagRegex = /<img\\b[^>]*>/gi;\nconst found = []; // {url, pos, srcAlt, srcTitle, nearestHeading...}\nlet tag;\nwhile ((tag = imgTagRegex.exec(text)) !== null) {\n  const imgTagHtml = tag[0];\n  const pos = tag.index ?? 0;\n\n  const getAttr = (name) => {\n    const re = new RegExp(`${name}\\\\s*=\\\\s*[\"']([^\"']+)[\"']`, \"i\");\n    return re.exec(imgTagHtml)?.[1] || \"\";\n  };\n\n  let cand =\n    getAttr(\"src\") ||\n    getAttr(\"data-src\") ||\n    pickBestFromSrcset(getAttr(\"srcset\")) ||\n    pickBestFromSrcset(getAttr(\"data-srcset\"));\n\n  cand = absolutize(cand);\n  if (!cand) continue;\n\n  const lower = cand.toLowerCase();\n  if (lower.includes(\"/blank_\")) continue;\n\n  if (\n    lower.includes(\"sprite\") ||\n    lower.includes(\"icon\") ||\n    lower.includes(\"tracking\") ||\n    lower.includes(\"pixel\") ||\n    lower.includes(\"beacon\")\n  ) continue;\n\n  if (/\\.(svg|ico)(\\?|#|$)/i.test(cand)) continue;\n\n  const srcAlt = safeText(decodeEntitiesLite(getAttr(\"alt\")));\n  const srcTitle = safeText(decodeEntitiesLite(getAttr(\"title\")));\n\n  const { nearestHeading, nearestHeadingLevel } = findNearestHeading(text, pos);\n  const { contextBefore, contextAfter } = getNearContext(text, pos);\n\n  found.push({\n    url: cand,\n    pos,\n    srcAlt,\n    srcTitle,\n    nearestHeading,\n    nearestHeadingLevel,\n    contextBefore,\n    contextAfter,\n  });\n}\n\n// Deduplicate by URL but keep earliest pos + best metadata\nconst byUrl = new Map();\nfor (const f of found) {\n  const key = f.url;\n  if (!byUrl.has(key)) {\n    byUrl.set(key, f);\n    continue;\n  }\n  const existing = byUrl.get(key);\n  // keep the earlier position\n  if (f.pos < existing.pos) byUrl.set(key, f);\n  else {\n    // merge metadata if existing is missing\n    byUrl.set(key, {\n      ...existing,\n      srcAlt: existing.srcAlt || f.srcAlt,\n      srcTitle: existing.srcTitle || f.srcTitle,\n      nearestHeading: existing.nearestHeading || f.nearestHeading,\n      nearestHeadingLevel: existing.nearestHeadingLevel || f.nearestHeadingLevel,\n      contextBefore: existing.contextBefore || f.contextBefore,\n      contextAfter: existing.contextAfter || f.contextAfter,\n    });\n  }\n}\n\nlet allImageObjs = Array.from(byUrl.values()).sort((a, b) => a.pos - b.pos);\n\n// mainImage را اول قرار بده (اگر وجود دارد)\nif (mainImage) {\n  const idx = allImageObjs.findIndex((x) => x.url === mainImage);\n  if (idx === -1) {\n    allImageObjs.unshift({\n      url: mainImage,\n      pos: -1,\n      srcAlt: \"\",\n      srcTitle: \"\",\n      nearestHeading: \"\",\n      nearestHeadingLevel: \"\",\n      contextBefore: \"\",\n      contextAfter: \"\",\n    });\n  } else if (idx > 0) {\n    const [it] = allImageObjs.splice(idx, 1);\n    allImageObjs.unshift(it);\n  }\n}\n\n// نهایتاً فقط URLها برای سازگاری قبلی\nconst allImages = allImageObjs.map((x) => x.url);\n\n// ---- build named image objects (با role دقیق‌تر و hint) ----\nconst maxImages = 10;\nconst images = allImageObjs.slice(0, maxImages).map((img, i) => {\n  const index = i + 1;\n  const role = i === 0 ? \"cover\" : \"inline\"; // چون از HTML استخراج میشه، به صورت پیش‌فرض inline\n  const ext = getExtFromUrl(img.url);\n\n  const headingHint = sanitizeHeadingForHint(img.nearestHeading);\n  const urlHint = getUrlHint(img.url);\n  const hint = headingHint || urlHint; // اولویت با heading نزدیک\n\n  const filenameCore = `${postSlug}-${role}-${pad2(index)}`;\n  const filename = hint ? `${filenameCore}-${hint}.${ext}` : `${filenameCore}.${ext}`;\n\n  // alt را: اول alt/tag خود تصویر، بعد عنوان، بعد heading\n  const srcAlt = img.srcAlt || img.srcTitle;\n  const alt =\n    srcAlt ||\n    (i === 0\n      ? `${titleForAlt} - تصویر کاور`\n      : img.nearestHeading\n      ? `${titleForAlt} - ${img.nearestHeading}`\n      : `${titleForAlt} - تصویر ${index}`);\n\n  return {\n    url: img.url,\n    role,\n    index,\n    ext,\n    filename,\n    alt,\n    sourceAlt: img.srcAlt || \"\",\n    sourceTitle: img.srcTitle || \"\",\n    nearestHeading: img.nearestHeading || \"\",\n    nearestHeadingLevel: img.nearestHeadingLevel || \"\",\n    contextBefore: img.contextBefore || \"\",\n    contextAfter: img.contextAfter || \"\",\n    position: img.pos,\n    hint: hint || \"\",\n  };\n});\n\n// ---- VIDEOS extraction (همان منطق قبلی + پوسترهای غیر blank) ----\nconst metaVideoRegexes = [\n  /<meta[^>]+property=[\"']og:video[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i,\n  /<meta[^>]+property=[\"']og:video:url[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i,\n  /<meta[^>]+name=[\"']twitter:player[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>/i,\n  /\"contentUrl\"\\s*:\\s*\"([^\"]+)\"/i,\n  /\"embedUrl\"\\s*:\\s*\"([^\"]+)\"/i,\n];\n\nlet mainVideo = \"\";\nfor (const r of metaVideoRegexes) {\n  const m = r.exec(text);\n  const u = absolutize(m?.[1]);\n  if (u) {\n    mainVideo = u;\n    break;\n  }\n}\n\nconst videoTagRegex = /<video\\b[^>]*>([\\s\\S]*?)<\\/video>/gi;\nconst videos = [];\nconst posters = [];\n\nconst getAttrFromTag = (tagHtml, name) => {\n  const re = new RegExp(`${name}\\\\s*=\\\\s*[\"']([^\"']+)[\"']`, \"i\");\n  return re.exec(tagHtml)?.[1] || \"\";\n};\n\nlet vmatch;\nwhile ((vmatch = videoTagRegex.exec(text)) !== null) {\n  const whole = vmatch[0];\n  const inner = vmatch[1] || \"\";\n\n  const vSrc = absolutize(getAttrFromTag(whole, \"src\"));\n  if (vSrc) videos.push(vSrc);\n\n  const poster = absolutize(getAttrFromTag(whole, \"poster\"));\n  if (poster && !poster.toLowerCase().includes(\"/blank_\")) posters.push(poster);\n\n  const sourceTagRegex = /<source\\b[^>]*>/gi;\n  let sm;\n  while ((sm = sourceTagRegex.exec(inner)) !== null) {\n    const sTag = sm[0];\n    const sSrc = absolutize(getAttrFromTag(sTag, \"src\"));\n    const sType = (getAttrFromTag(sTag, \"type\") || \"\").toLowerCase();\n\n    if ((sType && sType.startsWith(\"video/\")) || (sSrc && /\\.(mp4|webm|m3u8|mov|m4v)(\\?|#|$)/i.test(sSrc))) {\n      if (sSrc) videos.push(sSrc);\n    }\n  }\n}\n\nconst directVideoRegex = /\\bhttps?:\\/\\/[^\\s\"'<>]+?\\.(mp4|webm|m3u8|mov|m4v)(\\?[^\\s\"'<>]*)?/gi;\nlet dvm;\nwhile ((dvm = directVideoRegex.exec(text)) !== null) {\n  const u = absolutize(dvm[0]);\n  if (u) videos.push(u);\n}\n\nconst iframeTagRegex = /<iframe\\b[^>]*>/gi;\nlet im;\nwhile ((im = iframeTagRegex.exec(text)) !== null) {\n  const ifr = im[0];\n  const src = absolutize(getAttrFromTag(ifr, \"src\"));\n  if (!src) continue;\n\n  const s = src.toLowerCase();\n  if (\n    s.includes(\"youtube.com\") ||\n    s.includes(\"youtu.be\") ||\n    s.includes(\"player.vimeo.com\") ||\n    s.includes(\"vimeo.com\") ||\n    s.includes(\"aparat.com\") ||\n    s.includes(\"dailymotion.com\") ||\n    s.includes(\"jwplayer\") ||\n    s.includes(\"brightcove\") ||\n    s.includes(\"wistia\")\n  ) {\n    videos.push(src);\n  }\n}\n\nconst allVideos = uniq(videos);\nconst allPosters = uniq(posters);\nif (!mainVideo && allVideos.length) mainVideo = allVideos[0];\n\nreturn [\n  {\n    json: {\n      postSlug,\n      baseUrlUsed: baseUrl || \"\",\n\n      // ✅ موضوع/عنوان اصلی مقاله (به درخواست شما)\n      articleTitle: titleForAlt,\n      articleTitleRaw: safeText(inputTitle),\n      articleSlugSource: inputSlug || \"\",\n\n      // برای سازگاری:\n      mainImage: images[0]?.url || \"\",\n      allImages, // لیست URLهای خام\n      imageCount: images.length,\n\n      // خروجی غنی:\n      images,\n\n      mainVideo: mainVideo || \"\",\n      allVideos,\n      videoCount: allVideos.length,\n\n      videoPosters: allPosters,\n      posterCount: allPosters.length,\n    },\n  },\n];\n"
+      },
+      "name": "Extract Image URLs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1136
+      ],
+      "id": "c808ca67-f90e-4bf2-9496-d7fd244c5408"
+    },
+    {
+      "parameters": {
+        "url": "https://atom-game.ir/api/blog/categories/",
+        "options": {}
+      },
+      "name": "Get Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        352,
+        784
+      ],
+      "id": "4638e8ee-6812-4997-8784-e4d520d3fe1f"
+    },
+    {
+      "parameters": {
+        "functionCode": "const meta = $items('Clean URLs & Enhance Content')[0].json;\nconst desiredSlug = (meta.category_slug || '').toString().trim().toLowerCase();\n\nconst categories = items.map(i => i.json);\n\nfunction norm(v) {\n  return String(v || '').toLowerCase();\n}\n\nlet match = null;\nif (desiredSlug) {\n  match = categories.find(c => norm(c.slug) === desiredSlug);\n  if (!match) {\n    match = categories.find(c => norm(c.name) === desiredSlug);\n  }\n}\n\nconst needsCreate = !match;\n\nreturn [{\n  json: {\n    needsCreate,\n    category_id: match && match.id != null ? match.id : null,\n    category_slug: match && match.slug ? match.slug : (meta.category_slug || '').toString().trim().toLowerCase() || 'game-news',\n    category_name: match && match.name ? match.name : (meta.category_slug || 'Game News')\n  }\n}];\n"
+      },
+      "name": "Select Category",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        640,
+        784
+      ],
+      "id": "1de9e58f-6766-400e-8c87-4c5f6e48c50b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needsCreate}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "If Create Category",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        928,
+        784
+      ],
+      "id": "df7f4900-187e-480c-badf-848bc67e307b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/blog/categories/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$items(\"Auth Refresh\")[0].json.access}}"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-store"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"slug\": \"{{$json.category_slug}}\",\n  \"name\": \"{{$json.category_name}}\"\n}",
+        "options": {}
+      },
+      "name": "Create Category",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1152,
+        688
+      ],
+      "id": "be68482d-c978-41a0-a339-a3dcda76af33",
+      "executeOnce": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    category_id: $json.id,\n    category_slug: $json.slug,\n    category_name: $json.name\n  }\n}];\n"
+      },
+      "name": "Use Created Category",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        688
+      ],
+      "id": "8448dee1-1741-42fc-a2cb-77a4502d93bc"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    category_id: $json.category_id,\n    category_slug: $json.category_slug,\n    category_name: $json.category_name\n  }\n}];\n"
+      },
+      "name": "Use Existing Category",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        880
+      ],
+      "id": "d1f13cd4-9957-4f05-9932-a36878c55aea"
+    },
+    {
+      "parameters": {},
+      "name": "Final Category",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        784
+      ],
+      "id": "ccba14c7-b521-4497-a798-e6730738c83c"
+    },
+    {
+      "parameters": {
+        "url": "https://atom-game.ir/api/blog/tags/",
+        "options": {}
+      },
+      "name": "Get Tags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        352,
+        2064
+      ],
+      "id": "fd416f5e-a433-46fa-afda-27a23c895720"
+    },
+    {
+      "parameters": {
+        "functionCode": "const meta = $items('Clean URLs & Enhance Content')[0].json;\nconst desiredTags = Array.isArray(meta.tags) ? meta.tags : [];\n\nconst availableTags = items.map(i => i.json);\n\nfunction norm(v) {\n  return String(v || '').trim().toLowerCase();\n}\n\nfunction slugify(str) {\n  return norm(str)\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-+|-+$/g, '');\n}\n\nconst TAG_ALIASES = {\n  'gta vi': 'gta-6',\n  'gta 6': 'gta-6',\n  'grand theft auto 6': 'gta-6',\n  'elden ring': 'elden-ring',\n  'call of duty': 'call-of-duty',\n  'cod': 'call-of-duty',\n  'playstation': 'playstation',\n  'ps5': 'playstation-5',\n  'xbox': 'xbox',\n  'nintendo switch': 'nintendo-switch',\n  'pc': 'pc-gaming'\n};\n\nconst tagRecords = [];\n\nfor (const tagName of desiredTags) {\n  const baseNorm = norm(tagName);\n  const aliasSlug = TAG_ALIASES[baseNorm];\n  const desiredSlug = aliasSlug || slugify(tagName);\n\n  let found = availableTags.find(\n    t => norm(t.slug) === desiredSlug || norm(t.name) === baseNorm\n  );\n\n  if (!found) {\n    found = availableTags.find(\n      t => norm(t.name) === baseNorm || norm(t.slug) === baseNorm\n    );\n  }\n\n  if (found && found.id != null) {\n    tagRecords.push({\n      name: found.name || tagName,\n      slug: found.slug || desiredSlug,\n      id: found.id,\n      needsCreate: false\n    });\n  } else {\n    tagRecords.push({\n      name: tagName,\n      slug: desiredSlug,\n      id: null,\n      needsCreate: true\n    });\n  }\n}\n\nreturn tagRecords.map(r => ({ json: r }));\n"
+      },
+      "name": "Build Tag IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        640,
+        2064
+      ],
+      "id": "3e1cf629-2c4d-45c5-b30d-19c1c8dad3f9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needsCreate}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "If Create Tag",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        928,
+        2064
+      ],
+      "id": "ebe643b4-0d4c-4c86-8b1e-0384d7c6c422"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/blog/tags/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$items(\"Auth Refresh\")[0].json.access}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ slug: $json.slug, name: $json.name }) }}\n\n",
+        "options": {}
+      },
+      "name": "Create Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1376,
+        1968
+      ],
+      "id": "3e0c415e-3a7c-4814-afe0-b0a763ed82a6",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "// اگر قبلاً درست ساخته شده (مثلاً خروجی مرحله‌ی GET یا create موفق)، دست نزن\nif ($json?.slug && ($json?.id !== undefined && $json?.id !== null)) {\n  return [{ json: { id: $json.id, name: $json.name, slug: $json.slug } }];\n}\n\n// در غیر این صورت، slug را از name/slug موجود درست کن\nconst baseSlug = ($json.slug || $json.name || '')\n  .toString()\n  .trim()\n  .toLowerCase()\n  .replace(/\\s+/g, '-')\n  // اگر فارسی/یونیکد داری و می‌خوای حذف نشه، این خط را تغییر بده (پایین توضیح دادم)\n  .replace(/[^a-z0-9-]/g, '')\n  .replace(/-+/g, '-')\n  .replace(/^-|-$/g, '');\n\nconst fallback = ($json?.id ?? Date.now()).toString();\n\nreturn [{\n  json: {\n    id: $json.id,\n    name: $json.name,\n    slug: baseSlug || `tag-${fallback}`,\n  }\n}];\n"
+      },
+      "name": "Use Created Tag",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        1968
+      ],
+      "id": "326ad30a-24d6-4fe3-a4f4-2e612b5ef207"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    id: $json.id,\n    name: $json.name,\n    slug: $json.slug\n  }\n}];\n"
+      },
+      "name": "Use Existing Tag",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        2160
+      ],
+      "id": "7a74138a-13a0-46e5-8376-3f9367b857e2"
+    },
+    {
+      "parameters": {},
+      "name": "Final Tags",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        2064
+      ],
+      "id": "60c2e3a4-9622-4854-a9d7-30d69ebfe0be"
+    },
+    {
+      "parameters": {
+        "functionCode": "const tagIds = items\n  .map(i => i.json && i.json.id)\n  .filter(id => id != null);\n\nreturn [{\n  json: {\n    tag_ids: tagIds\n  }\n}];\n"
+      },
+      "name": "Collect Tag IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        2064
+      ],
+      "id": "3689a1e3-1f11-455d-bb2c-65bca7ff0854"
+    },
+    {
+      "parameters": {
+        "url": "https://atom-game.ir/api/blog/series/",
+        "options": {}
+      },
+      "name": "Get Series",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        640,
+        1472
+      ],
+      "id": "9dfece8d-18af-4ce6-9dc5-149b74c20904"
+    },
+    {
+      "parameters": {
+        "functionCode": "const meta = $items('Clean URLs & Enhance Content')[0].json;\nconst desiredSlug = (meta.series_slug || '').toString().trim().toLowerCase();\n\nconst seriesList = items.map(i => i.json);\n\nfunction norm(v) {\n  return String(v || '').toLowerCase();\n}\n\nlet match = null;\nif (desiredSlug) {\n  match = seriesList.find(s => norm(s.slug) === desiredSlug);\n  if (!match) {\n    match = seriesList.find(s => norm(s.title) === desiredSlug);\n  }\n}\n\nconst needsCreate = !match;\n\nreturn [{\n  json: {\n    needsCreate,\n    series_id: match && match.id != null ? match.id : null,\n    series_slug: match && match.slug ? match.slug : (meta.series_slug || '').toString().trim().toLowerCase() || 'daily-digest',\n    series_title: match && match.title ? match.title : (meta.series_slug || 'Daily Digest')\n  }\n}];\n"
+      },
+      "name": "Select Series",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1472
+      ],
+      "id": "904b9dcb-c784-4d11-96d9-f25ac48ea11a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needsCreate}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "If Create Series",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        1472
+      ],
+      "id": "320362ee-f0c4-42fe-bf2a-48d9666936ef"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/blog/series/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$items(\"Auth Refresh\")[0].json.access}}\n\n"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"slug\": $json.series_slug, \"title\": $json.series_title, \"description\": \"\", \"order_strategy\": \"manual\" } }}",
+        "options": {}
+      },
+      "name": "Create Series",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1376,
+        1376
+      ],
+      "id": "98be6bd5-7e8c-4801-b91a-966c39cd970c",
+      "executeOnce": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    series_id: $json.id,\n    series_slug: $json.slug,\n    series_title: $json.title\n  }\n}];\n"
+      },
+      "name": "Use Created Series",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        1376
+      ],
+      "id": "a34b7d1d-8a11-4f92-a120-f65bcdf0a353"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    series_id: $json.series_id,\n    series_slug: $json.series_slug,\n    series_title: $json.series_title\n  }\n}];\n"
+      },
+      "name": "Use Existing Series",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        1568
+      ],
+      "id": "4925dd95-39f0-4abb-ae2b-e2991454bee9"
+    },
+    {
+      "parameters": {},
+      "name": "Final Series",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        1472
+      ],
+      "id": "0607bbaf-325d-4274-88f2-0d3974e259fb"
+    },
+    {
+      "parameters": {
+        "functionCode": "// =========================\n// 0) فقط ورودی همین نود (خروجی Normalizer)\n// =========================\nconst inputRoot = $json;\nconst source = (inputRoot && typeof inputRoot === 'object') ? inputRoot : {};\nconst sourceMedia = Array.isArray(source.media) ? source.media : [];\n\n// =========================\n// 1) نودهای کمکی (فقط fallback اگر source نداد)\n// =========================\nconst categoryNode = $items('Final Category')[0];\nconst categoryInfo = (categoryNode && categoryNode.json) ? categoryNode.json : {};\n\nconst seriesNode = $items('Final Series')[0];\nconst seriesInfo = (seriesNode && seriesNode.json) ? seriesNode.json : {};\n\n// Collect Tag IDs (fallback)\nconst tagItems = $items('Collect Tag IDs') || [];\nconst collectedTagIds = [];\nfor (let i = 0; i < tagItems.length; i++) {\n  const j = (tagItems[i] && tagItems[i].json) ? tagItems[i].json : {};\n  const arr = (j.tag_ids && Array.isArray(j.tag_ids))\n    ? j.tag_ids\n    : (j.tag_id != null ? [j.tag_id] : []);\n  for (let k = 0; k < arr.length; k++) {\n    if (arr[k] != null) collectedTagIds.push(arr[k]);\n  }\n}\n\n// =========================\n// helpers\n// =========================\nfunction toNumberOrDefault(value, def) {\n  if (value === null || value === undefined || value === '') return def;\n  const n = Number(value);\n  return (isNaN(n) ? def : n);\n}\n\nfunction uniqNumbers(arr) {\n  if (!Array.isArray(arr)) return [];\n  const seen = new Set();\n  const out = [];\n  for (const v of arr) {\n    const n = toNumberOrDefault(v, null);\n    if (n === null) continue;\n    if (!seen.has(n)) { seen.add(n); out.push(n); }\n  }\n  return out;\n}\n\nfunction normalizeTagArray(arr) { return uniqNumbers(arr); }\nfunction isNonEmptyString(s) { return typeof s === 'string' && s.trim().length > 0; }\nfunction normalizeVisibility(v) { return (v === 'public' || v === 'private') ? v : 'public'; }\nfunction normalizeStatus(s) { return (s === 'draft' || s === 'published' || s === 'scheduled') ? s : 'draft'; }\n\n// =========================\n// 2) fallback image (اگر cover/og تو source نبود)\n// =========================\nfunction isValidImage(m) {\n  if (!m || m.type !== 'image') return false;\n\n  const url = (typeof m.url === 'string') ? m.url.trim() : '';\n  if (!url || !(url.startsWith('http://') || url.startsWith('https://'))) return false;\n\n  const w = toNumberOrDefault(m.width, null);\n  const h = toNumberOrDefault(m.height, null);\n  if (w === null || h === null) return false;\n  if (w < 200 || h < 120) return false;\n  if (w === 1 || h === 1) return false;\n\n  const title = (typeof m.title === 'string') ? m.title.toLowerCase() : '';\n  const urlLower = url.toLowerCase();\n  if (title.includes('blank.gif') || urlLower.includes('blank')) return false;\n\n  const id = toNumberOrDefault(m.id, null);\n  if (id === null) return false;\n\n  return true;\n}\n\nfunction pickLargestImage(images) {\n  if (!images.length) return null;\n  let best = images[0];\n  for (let i = 1; i < images.length; i++) {\n    const a = best, b = images[i];\n    const aw = toNumberOrDefault(a.width, 0), bw = toNumberOrDefault(b.width, 0);\n    const ah = toNumberOrDefault(a.height, 0), bh = toNumberOrDefault(b.height, 0);\n    if (bw > aw || (bw === aw && bh > ah)) best = b;\n  }\n  return best;\n}\n\nconst validImages = sourceMedia.filter(isValidImage);\nconst fallbackCover = pickLargestImage(validImages);\nconst fallbackCoverId = fallbackCover ? toNumberOrDefault(fallbackCover.id, null) : null;\n\n// =========================\n// 3) متن‌ها (همه از source)\n// =========================\nconst title = isNonEmptyString(source.title) ? source.title : '';\nconst excerpt = isNonEmptyString(source.excerpt) ? source.excerpt : '';\n\nconst content =\n  isNonEmptyString(source.content)\n    ? source.content\n    : (isNonEmptyString(source.summary_markdown) ? source.summary_markdown : '');\n\n// =========================\n// 4) تاریخ‌ها و status\n// =========================\nconst published_at = source.published_at ? source.published_at : null;\nconst scheduled_at = source.scheduled_at ? source.scheduled_at : null;\n\nlet status = normalizeStatus(source.status);\nif (scheduled_at) status = 'scheduled';\nelse if (published_at) status = 'published';\nelse status = normalizeStatus(status);\n\nconst visibility = normalizeVisibility(source.visibility);\n\n// =========================\n// 5) series/category/tag\n// =========================\nlet series = 0;\nif (source.series != null) series = toNumberOrDefault(source.series, 0);\nelse if (source.series_id != null) series = toNumberOrDefault(source.series_id, 0);\nelse if (seriesInfo && seriesInfo.series_id != null) series = toNumberOrDefault(seriesInfo.series_id, 0);\nelse if (seriesInfo && seriesInfo.id != null) series = toNumberOrDefault(seriesInfo.id, 0);\n\nlet category_id = 0;\nif (source.category_id != null) category_id = toNumberOrDefault(source.category_id, 0);\nelse if (categoryInfo && categoryInfo.category_id != null) category_id = toNumberOrDefault(categoryInfo.category_id, 0);\nelse if (categoryInfo && categoryInfo.id != null) category_id = toNumberOrDefault(categoryInfo.id, 0);\n\nlet tag_ids = [];\nif (Array.isArray(source.tag_ids) && source.tag_ids.length > 0) tag_ids = normalizeTagArray(source.tag_ids);\nelse tag_ids = normalizeTagArray(collectedTagIds);\ntag_ids = uniqNumbers(tag_ids);\n\n// =========================\n// 6) SEO / slug / canonical\n// =========================\nconst seo_title = isNonEmptyString(source.seo_title) ? source.seo_title : title;\nconst seo_description = isNonEmptyString(source.seo_description) ? source.seo_description : excerpt;\n\nconst slug = isNonEmptyString(source.slug) ? source.slug : '';\nconst canonical_url = (typeof source.canonical_url === 'string') ? source.canonical_url : '';\n\n// =========================\n// 7) cover/og\n// =========================\nlet cover_media_id = toNumberOrDefault(source.cover_media_id, null);\nif (cover_media_id === null && fallbackCoverId !== null) cover_media_id = fallbackCoverId;\n\nlet og_image_id = toNumberOrDefault(source.og_image_id, null);\nif (og_image_id === null && cover_media_id !== null) og_image_id = cover_media_id;\n\n// =========================\n// 8) body نهایی\n// =========================\nconst body = {\n  title,\n  excerpt,\n  content,\n  status,\n  visibility,\n  published_at,\n  scheduled_at,\n  series,\n  seo_title,\n  seo_description,\n  slug,\n  canonical_url,\n  tag_ids,\n  category_id,\n  cover_media_id,\n  og_image_id,\n};\n\nreturn [{ json: body }];\n"
+      },
+      "name": "Build Blog Post Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        3536,
+        1072
+      ],
+      "id": "2d06e0c9-a320-4bbc-8c7a-bb645e73b526"
+    },
+    {
+      "parameters": {
+        "chatId": "2075065850",
+        "text": "={{ $json.summary_markdown || $json.text || $json.output || $json.response }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Send Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        352,
+        1872
+      ],
+      "id": "5800f4b0-4eec-44af-83d4-8882787c84e4",
+      "webhookId": "82bd8bb8-75c2-4de6-84a0-b8fd3261d9e2",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "2075065850",
+        "messageId": "={{$json.message_id}}",
+        "text": "={{ \n  (()=>{\n    const total = ($items('Prepare Sources & Add IDs') || []).length || 0;\n    const currentIndex = $json.itemIndex + 1;\n    const src = $json.source || 'نامشخص';\n    const ok = $json.success === true ? ' ✅' : ' ❌';\n    return `⚙️ [${currentIndex}/${total}] پردازش شد: ${src}${ok}`;\n  })()\n}}",
+        "additionalFields": {}
+      },
+      "name": "Update Status",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -2592,
+        2208
+      ],
+      "id": "5d5c66eb-f720-45e8-ab3a-1b84f9938c4c",
+      "webhookId": "25694a74-b3b9-4e93-a908-fc17c290080f",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "2075065850",
+        "messageId": "={{$node[\"Filter & Prepare All Articles\"].json.messageId}}",
+        "text": "✅ پردازش کامل شد. خلاصه اخبار جدید برای شما ارسال گردید.",
+        "additionalFields": {}
+      },
+      "name": "Update Final Status (Success)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        640,
+        1872
+      ],
+      "id": "96206885-b514-4e82-a85d-81248de1199f",
+      "webhookId": "137e69ab-b2b0-4b85-b32d-389ec022d6b1",
+      "credentials": {
+        "telegramApi": {
+          "id": "KGUK58JPJX735Kfk",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "images",
+        "options": {}
+      },
+      "name": "Split Out Images",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        1136
+      ],
+      "id": "835e02b2-3a2f-48e5-a9ad-20313127605b"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}\n\n",
+        "options": {}
+      },
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1376,
+        1136
+      ],
+      "id": "bdfbf59a-057a-4778-97a0-e5bfe4bda93c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/blog/media/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$items(\"Auth Refresh\")[0].json.access}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "title",
+              "value": "=={{$items(\"Clean URLs & Enhance Content\")[0].json.title || \"image\"}}"
+            },
+            {
+              "name": "alt_text",
+              "value": "=={{$items(\"Clean URLs & Enhance Content\")[0].json.title || \"image\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Create Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1600,
+        1136
+      ],
+      "id": "7a26b960-0084-445f-97e4-6bc88b6d6d0e"
+    },
+    {
+      "parameters": {
+        "functionCode": "const media = [];\n\nfor (const item of items) {\n  const j = item.json ?? {};\n\n  const id = j.id ?? null;\n  const url = j.url || j.file || j.file_url || j.original || j.download_url || null;\n\n  // اطلاعات مهم (به‌صورت امن/تمیز)\n  const type = j.type ?? null;\n  const mime = j.mime ?? null;\n  const width = j.width ?? null;\n  const height = j.height ?? null;\n  const sizeBytes = j.size_bytes ?? null;\n  const duration = j.duration ?? null;\n  const storageKey = j.storage_key ?? null;\n  const uploadedBy = j.uploaded_by ?? null;\n  const createdAt = j.created_at ?? null;\n\n  // alt_text: حذف \"=\" ابتدای متن (اگر وجود داشت) + trim\n  let altText = j.alt_text ?? null;\n  if (typeof altText === \"string\") {\n    altText = altText.trim();\n    if (altText.startsWith(\"=\")) altText = altText.slice(1).trim();\n    if (!altText) altText = null;\n  }\n\n  // title: decode ساده برای %27 و...\n  let title = j.title ?? null;\n  if (typeof title === \"string\") {\n    title = title.trim();\n    try { title = decodeURIComponent(title); } catch (_) {}\n    if (!title) title = null;\n  }\n\n  // اگر اصلاً url یا id نداریم، بیخیال شو (قابل تغییر)\n  if (id == null && !url) continue;\n\n  media.push({\n    id,\n    url,\n    type,\n    mime,\n    width,\n    height,\n    sizeBytes,\n    duration,\n    storageKey,\n    title,\n    altText,\n    uploadedBy,\n    createdAt,\n  });\n}\n\n// خروجی‌های کمکی هم کنار media برگردون\nconst mediaIds = media.map(m => m.id).filter(v => v != null);\nconst mediaUrls = media.map(m => m.url).filter(Boolean);\n\nreturn [\n  {\n    json: {\n      media,       // لیست کامل اطلاعات مهم\n      mediaIds,    // فقط id ها\n      mediaUrls,   // فقط url ها\n      count: media.length,\n    },\n  },\n];\n"
+      },
+      "name": "Collect Media Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        1136
+      ],
+      "id": "f87b5c43-543f-45d3-9398-aae8d3e4e60f"
+    },
+    {
+      "parameters": {
+        "jsCode": "function slugifyAscii(s) {\n  return (s ?? \"\")\n    .toString()\n    .trim()\n    .toLowerCase()\n    // allow only a-z 0-9 _ -\n    .replace(/[^a-z0-9_-]+/g, \"-\")\n    .replace(/-+/g, \"-\")\n    .replace(/^-|-$/g, \"\");\n}\n\nfor (const item of $input.all()) {\n  const name = (item.json.name ?? \"\").toString().trim();\n  const existingSlug = (item.json.slug ?? \"\").toString().trim();\n\n  let slug = slugifyAscii(existingSlug.length ? existingSlug : name);\n\n  // If name was Persian-only, slug becomes empty. Create a safe fallback.\n  if (!slug) {\n    // stable-ish fallback using a tiny hash of the name\n    let hash = 0;\n    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;\n    slug = `tag-${hash.toString(16)}`; // e.g. tag-7a3f2c1\n  }\n\n  item.json.slug = slug;\n}\n\nreturn $input.all();\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        1968
+      ],
+      "id": "bec8aa2e-ed17-46bf-9092-02b3b1b121a1",
+      "name": "Add Field"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2048,
+        816
+      ],
+      "id": "b235a14d-7569-4d92-bc97-036c43ba4736",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2272,
+        1472
+      ],
+      "id": "8b8c91cc-08bb-49e8-a492-543405c548e0",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2496,
+        960
+      ],
+      "id": "3e712cdb-07b5-487c-b7e3-2fa1f57bf3b6",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        656,
+        1248
+      ],
+      "id": "d60d507b-c18b-4970-b7d5-12f93c0e1ba1",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YtU7J5m2EweUzwOC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=\"prompt_fa\": \"خروجی تو باید فقط و فقط یک JSON معتبر باشد و هیچ متن دیگری نداشته باشد.\\nبه هیچ وجه از ``` استفاده نکن.\\n\\nقانون حیاتی (غیرقابل نقض):\\n- تو حق نداری هیچ URL جدیدی بسازی، تغییر بدهی، normalize کنی، decode/encode کنی یا query/hash را دستکاری کنی.\\n- فقط و فقط باید از URLهای موجود در ورودی استفاده کنی.\\n- تعداد آیتم‌های خروجی باید دقیقاً برابر تعداد images ورودی باشد.\\n- فیلد url در خروجی باید دقیقاً یکی از urlهای ورودی باشد (کپی دقیق).\\n\\nورودی:\\n- ورودی یک آرایه با 1 آیتم است.\\n- داخل آن: postSlug یا post_slug، articleTitle (عنوان مقاله)، و images[] وجود دارد.\\n- هر آیتم images شامل: index, url, role (cover/inline), sourceAlt, sourceTitle, nearestHeading, nearestHeadingLevel, contextBefore, contextAfter, hint, position و ... است.\\n\\nهدف:\\n- فقط تصاویر «مرتبط با موضوع مقاله» را keep=true کن.\\n- سایر تصاویر (تبلیغاتی/سایدبار/مرتبط‌ها/شبکه‌های اجتماعی/لوگو/آیکن/ترکر/اسپرایت/ناوبری) را keep=false کن.\\n- با این حال، ساختار خروجی باید شامل همه تصاویر باشد (به تعداد ورودی).\\n\\nکار تصمیم‌گیری برای هر تصویر:\\nبرای هر تصویر ورودی، این فیلدها را پر کن: keep, use_case, label_en, alt_fa, reason.\\n\\nتعریف «موضوع مقاله»:\\n- موضوع اصلی را از articleTitle استخراج کن.\\n- کلیدواژه‌ها را از خود عنوان و اگر لازم بود از nearestHeading همین تصویر و contextBefore/contextAfter همان تصویر پشتیبانی کن.\\n- هم‌معنی‌ها/پاراافراز ساده مجاز است، اما فقط برای تصمیم‌گیری؛ خروجی باید مبتنی بر شواهد متنی ورودی باشد.\\n\\nفیلترهای قطعی (اگر هرکدام درست بود => keep=false):\\n1) فیلتر blank:\\n- اگر url شامل \"blank.gif\" یا \"/blank_\" بود.\\n2) فیلتر آیکن/لوگو/اسپرایت/ترکر/پیکسل:\\n- اگر url یا sourceAlt یا sourceTitle یا hint یا context شامل هرکدام از این واژه‌ها بود:\\n icon, sprite, logo, avatar, profile, favicon, badge, pixel, beacon, tracking, analytics, counter, ads, advert, banner\\n3) فیلتر شبکه اجتماعی/اشتراک‌گذاری:\\n- اگر نشانه‌های share/social یا نام شبکه‌ها دیده شد:\\n share, social, facebook, twitter, x.com, telegram, whatsapp, linkedin, pinterest, instagram\\n4) فیلتر ناوبری/قالب سایت (غیرمحتوایی):\\n- اگر contextBefore/contextAfter یا nearestHeading نشان دهد تصویر مربوط به header/footer/menu/nav/breadcrumb/sidebar/widget/search/subscribe/newsletter/comment است.\\n5) فیلتر «مطالب مرتبط/ترند/پیشنهادی»:\\n- اگر contextBefore/contextAfter یا nearestHeading یا alt/title شامل هرکدام بود:\\n related, trending, latest, popular, recommended, you may also like, more stories, next, previous\\n\\nقواعد «مرتبط بودن با موضوع» (برای keep=true باید حداقل یکی برقرار باشد):\\nA) شواهد متنی مستقیم:\\n- در یکی از این فیلدها: sourceAlt, sourceTitle, nearestHeading, contextBefore, contextAfter\\n کلیدواژه/عبارت مرتبط با articleTitle وجود داشته باشد.\\nB) کاور معتبر:\\n- اگر role==\"cover\" و هیچ‌کدام از فیلترهای قطعی فعال نیست و حداقل یک نشانه‌ی متنی از A وجود دارد => کاندید cover.\\nC) تصویر محتوایی داخل متن:\\n- اگر نقش inline است و A برقرار است و هیچ فیلتر قطعی فعال نیست => keep=true.\\n\\nاصل محافظه‌کارانه:\\n- اگر برای ارتباط شواهد کافی نداری => keep=false.\\n- «بزرگ بودن تصویر» یا «ظاهر حرفه‌ای» به تنهایی دلیل keep نیست.\\n\\nuse_case:\\n- اگر keep=true و بهترین کاندید برای تصویر اصلی مقاله است => use_case=\"cover\".\\n- اگر keep=true و داخل متن توضیح‌دهنده است => use_case=\"inline\".\\n- اگر keep=true و به‌صورت مجموعه تصاویر هم‌موضوع است => use_case=\"gallery\".\\n- اگر keep=true و به درد og/اشتراک‌گذاری می‌خورد ولی کاور نیست => use_case=\"og\".\\n- اگر keep=false همیـشه use_case را یکی از همین‌ها بگذار (ترجیحاً \"inline\" یا \"gallery\")، اما keep=false باقی بماند.\\n\\ncover_index:\\n- cover_index باید index اولین آیتمی باشد که keep=true و use_case=\"cover\" است.\\n- اگر هیچ cover تایید نشد، cover_index=1.\\n\\nlabel_en:\\n- فقط حروف کوچک انگلیسی a-z و خط تیره '-' مجاز است.\\n- طول <= 25.\\n- بدون تاریخ/عدد سریالی طولانی.\\n- نباید شامل post_slug/postSlug یا تکرار کامل آن باشد.\\n- بین تصاویر keep=true تکراری نباشد (اگر مجبور شدی با یک واژه‌ی کوتاه متفاوت کن).\\n- label_en را از مفهوم تصویر بساز (مثلاً: \"main-diagram\", \"product-shot\", \"city-view\")؛ اگر مفهوم نامشخص است: \"image\" + یک کلمه‌ی معنادار از nearestHeading.\\n\\nalt_fa:\\n- فارسی، مرتبط با موضوع و خود تصویر.\\n- حداکثر 120 کاراکتر.\\n- اگر keep=false: alt_fa هم بنویس ولی کوتاه و عمومی (مثلاً: \"تصویر غیرمرتبط با موضوع مقاله\").\\n\\nreason:\\n- خیلی کوتاه (حداکثر ~12 کلمه).\\n- مشخص کن چرا نگه داشتی یا چرا حذف شد (مثلاً: \"بنر تبلیغاتی در سایدبار\"، \"مطابق عنوان و متن اطراف\"، \"آیکن/لوگو\"، ...)\\n\\nخروجی دقیقاً با این ساختار و فقط همین:\\n{\\n \"post_slug\": \"\",\\n \"cover_index\": 1,\\n \"images\": [\\n {\\n \"index\": 1,\\n \"url\": \"\",\\n \"keep\": true,\\n \"use_case\": \"cover\",\\n \"label_en\": \"short-kebab-case-hint\",\\n \"alt_fa\": \"ALT فارسی مرتبط (حداکثر 120 کاراکتر)\",\\n \"reason\": \"خیلی کوتاه\"\\n }\\n ]\\n}\\n\\nورودی:\\n{{ JSON.stringify($json) }}\\n\"",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        576,
+        1024
+      ],
+      "id": "14275424-652f-413e-b164-90c9d274cf6c",
+      "name": "AI Mdeia filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node (JavaScript)\n// هدف: استخراج JSON معتبر از خروجی AI که ممکنه داخل output/text باشد یا داخل ```json ... ``` باشد.\n\nconst candidates = [\n  $json?.output,\n  $json?.text,\n  $json?.response,\n  $json?.data,\n  $json,\n];\n\nconst toStr = (v) => (typeof v === \"string\" ? v : JSON.stringify(v));\n\nlet raw = \"\";\nfor (const c of candidates) {\n  if (!c) continue;\n  const s = toStr(c);\n  // اگر شبیه JSON یا شامل ``` یا شامل { } بود، انتخابش کن\n  if (s.includes(\"{\") && s.includes(\"}\")) { raw = s; break; }\n}\n\nraw = String(raw || \"\").trim();\nif (!raw) throw new Error(\"No AI output found to parse\");\n\n// 1) حذف code fence ها\nlet cleaned = raw\n  .replace(/^```json\\s*/i, \"\")\n  .replace(/^```\\s*/i, \"\")\n  .replace(/```$/i, \"\")\n  .trim();\n\n// 2) اگر داخل یک رشته، JSON وجود دارد (قبل/بعدش متن هست)، فقط اولین JSON object را جدا کن\nconst extractFirstJsonObject = (s) => {\n  const start = s.indexOf(\"{\");\n  if (start < 0) return \"\";\n  let depth = 0;\n  let inStr = false;\n  let esc = false;\n\n  for (let i = start; i < s.length; i++) {\n    const ch = s[i];\n\n    if (inStr) {\n      if (esc) esc = false;\n      else if (ch === \"\\\\\") esc = true;\n      else if (ch === '\"') inStr = false;\n      continue;\n    } else {\n      if (ch === '\"') { inStr = true; continue; }\n      if (ch === \"{\") depth++;\n      if (ch === \"}\") depth--;\n      if (depth === 0) return s.slice(start, i + 1);\n    }\n  }\n  return \"\";\n};\n\nconst jsonSlice = cleaned.startsWith(\"{\") ? cleaned : extractFirstJsonObject(cleaned);\nif (!jsonSlice) throw new Error(\"Could not locate a JSON object in AI output\");\n\n// 3) پارس JSON\nlet parsed;\ntry {\n  parsed = JSON.parse(jsonSlice);\n} catch (e) {\n  throw new Error(\"AI output JSON.parse failed: \" + e.message + \"\\n---\\n\" + jsonSlice.slice(0, 4000));\n}\n\n// 4) (اختیاری ولی خیلی مهم) ولیدیشن ضد هالوسینیشن URL\n// اگر input اصلی را هم کنار AI داری، این چک را روشن کن.\n// اینجا فرض می‌کنیم input images در $json.input_images یا در $json.original.images بوده.\n// اگر چنین فیلدی ندارید، این بخش را کامنت کنید.\n\nconst inputImages =\n  $json?.original?.images ||\n  $json?.input_images ||\n  null;\n\nif (inputImages && Array.isArray(inputImages) && Array.isArray(parsed.images)) {\n  const allowed = new Set(inputImages.map((x) => x?.url).filter(Boolean));\n  for (const it of parsed.images) {\n    if (it?.url && !allowed.has(it.url)) {\n      throw new Error(\"AI returned a URL that is not in input: \" + it.url);\n    }\n  }\n}\n\n// 5) خروجی نهایی\nreturn [{ json: parsed }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        1136
+      ],
+      "id": "8a28aa4c-6618-4476-a82d-7b509a6b9439",
+      "name": "Normalize"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/blog/posts/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$items(\"Auth Refresh\")[0].json.access}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($items(\"Build Blog Post Payload\")[0].json, null, 2) }}\n",
+        "options": {}
+      },
+      "name": "Create Blog Post1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3840,
+        1072
+      ],
+      "id": "653091c8-a7d7-4f27-8984-d0505cd2b302"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Selector-only parser (supports: { chosen_index, chosen_link, reason })\n// Always derives the final link from articles[safeIndex] (never trust model output)\n\nconst raw = $json.output || $json.text || $json.response || $json;\n\n// Articles list from previous node\nconst articles =\n  $items(\"Filter & Prepare All Articles\")[0]?.json?.articles || [];\n\nlet meta;\n\n// Try parsing AI JSON\ntry {\n  meta = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  meta = {\n    chosen_index: 0,\n    chosen_link: articles[0]?.link || '',\n    reason: 'fallback – JSON parse error'\n  };\n}\n\n// Normalize index\nlet chosenIndex = meta.chosen_index;\n\nif (!Number.isInteger(chosenIndex)) {\n  chosenIndex = parseInt(chosenIndex, 10);\n}\n\nif (!Number.isInteger(chosenIndex)) {\n  chosenIndex = 0;\n}\n\n// Clamp to valid range\nconst safeIndex =\n  chosenIndex >= 0 && chosenIndex < articles.length ? chosenIndex : 0;\n\n// Always trust article list for link (ignore model link)\nconst chosenLink = (articles[safeIndex]?.link || '').trim();\n\nreturn [\n  {\n    json: {\n      chosen_index: safeIndex,\n      chosen_link: chosenLink,\n      selection_reason: (meta.reason || '').toString().trim()\n    }\n  }\n];\n"
+      },
+      "name": "Parse AI JSON1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1344,
+        1568
+      ],
+      "id": "e345c6aa-5287-49e6-87ba-153fe0d0f2f6"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.chosen_link || $items(\"Pick Chosen Article\")[0].json.chosen_article.link }}\n",
+        "options": {}
+      },
+      "name": "Fetch Original Article HTML1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1120,
+        1568
+      ],
+      "id": "86a65ad7-5eb5-43ed-ac27-f92d1c89bac3"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Advanced Generic Article Extractor (n8n Code node)\n *\n * Accepts almost any input shape:\n * - HTML string\n * - object containing html/body/data/response/text/output\n * - array of such objects\n * - nested structures (deep scan)\n * - already-extracted article JSON (normalize)\n *\n * Output (always):\n * { title, description, author, published_at, content_text, content_html, word_count, method, warnings }\n */\n\nfunction isPlainObject(x) {\n  return Object.prototype.toString.call(x) === '[object Object]';\n}\n\nfunction safeString(x) {\n  try {\n    if (x == null) return '';\n    if (typeof x === 'string') return x;\n    if (typeof x === 'number' || typeof x === 'boolean') return String(x);\n    return JSON.stringify(x);\n  } catch {\n    try { return String(x); } catch { return ''; }\n  }\n}\n\n/** Minimal (but useful) HTML entity decoding */\nfunction decodeHtmlEntities(str) {\n  if (!str) return '';\n  return String(str)\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#039;/gi, \"'\")\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&#(\\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));\n}\n\nfunction stripTags(html) {\n  if (!html) return '';\n  return decodeHtmlEntities(\n    String(html)\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/p\\s*>/gi, '\\n')\n      .replace(/<\\/h\\d\\s*>/gi, '\\n')\n      .replace(/<\\/li\\s*>/gi, '\\n')\n      .replace(/<li[^>]*>/gi, '• ')\n      .replace(/<[^>]+>/g, ' ')\n      .replace(/[ \\t]+\\n/g, '\\n')\n      .replace(/\\n{3,}/g, '\\n\\n')\n      .replace(/[ \\t]{2,}/g, ' ')\n      .trim()\n  );\n}\n\nfunction wordCount(text) {\n  if (!text) return 0;\n  return (String(text).trim().match(/\\S+/g) || []).length;\n}\n\nfunction looksLikeHtml(s) {\n  if (!s) return false;\n  const t = String(s).trim();\n  // fast checks\n  if (t.startsWith('<!doctype') || t.startsWith('<html') || t.startsWith('<head') || t.startsWith('<body')) return true;\n  // general tag presence\n  return /<\\/?(html|head|body|article|main|p|div|span|script|style)\\b/i.test(t);\n}\n\nfunction looksLikeExtractedArticleJson(obj) {\n  if (!isPlainObject(obj)) return false;\n  // Heuristic: keys we expect from extracted article JSON\n  const keys = Object.keys(obj);\n  const hasCore = keys.includes('content_text') || keys.includes('content_html');\n  const hasMeta = keys.includes('title') || keys.includes('description') || keys.includes('author') || keys.includes('published_at');\n  return hasCore && hasMeta;\n}\n\n/**\n * Deep scan any structure for:\n * - HTML-ish string\n * - large text blocks (fallback)\n */\nfunction deepFindCandidates(root, maxNodes = 2000) {\n  const htmlCandidates = [];\n  const textCandidates = [];\n  const warnings = [];\n\n  const seen = new Set();\n  const q = [root];\n  let steps = 0;\n\n  while (q.length && steps++ < maxNodes) {\n    const cur = q.shift();\n    if (cur == null) continue;\n\n    if (typeof cur === 'string') {\n      const s = cur.trim();\n      if (!s) continue;\n\n      if (looksLikeHtml(s)) htmlCandidates.push(s);\n      else if (s.length > 300) textCandidates.push(s);\n      continue;\n    }\n\n    if (typeof cur === 'number' || typeof cur === 'boolean') continue;\n\n    // Avoid cycles\n    if (typeof cur === 'object') {\n      if (seen.has(cur)) continue;\n      seen.add(cur);\n    }\n\n    if (Array.isArray(cur)) {\n      for (const v of cur) q.push(v);\n      continue;\n    }\n\n    if (isPlainObject(cur)) {\n      // strongly weighted fields first\n      const directFields = [\n        'html','body','data','response','text','output','content','contents','document','page',\n        'article','articleHtml','articleHTML','raw','rawHtml','rawHTML','result'\n      ];\n\n      for (const k of directFields) {\n        if (cur[k] != null) {\n          if (typeof cur[k] === 'string') {\n            const s = cur[k].trim();\n            if (looksLikeHtml(s)) htmlCandidates.push(s);\n            else if (s.length > 300) textCandidates.push(s);\n          } else {\n            q.push(cur[k]);\n          }\n        }\n      }\n\n      // then traverse all keys\n      for (const [k, v] of Object.entries(cur)) {\n        // skip very common giant binary-ish fields\n        if (/^(base64|image|binary|buffer)$/i.test(k)) continue;\n        if (v == null) continue;\n        if (typeof v === 'string') {\n          const s = v.trim();\n          if (!s) continue;\n          if (looksLikeHtml(s)) htmlCandidates.push(s);\n          else if (s.length > 300) textCandidates.push(s);\n        } else {\n          q.push(v);\n        }\n      }\n    }\n  }\n\n  if (steps >= maxNodes) warnings.push(`deep-scan capped at ${maxNodes} nodes (input too large or deeply nested)`);\n\n  // Prefer biggest/most likely candidates\n  htmlCandidates.sort((a,b) => b.length - a.length);\n  textCandidates.sort((a,b) => b.length - a.length);\n\n  return { htmlCandidates, textCandidates, warnings };\n}\n\n/**\n * Picks the best \"source\" input:\n * - If already extracted JSON -> return normalized object marker\n * - Else find HTML (best)\n * - Else find large text (fallback)\n */\nfunction pickInput(raw) {\n  const warnings = [];\n\n  // Already-extracted JSON in $json\n  if (looksLikeExtractedArticleJson(raw)) {\n    return { kind: 'extracted-json', value: raw, warnings };\n  }\n\n  // Common n8n wrappers\n  // sometimes $json might be something like { items: [ { json: {...} } ] } but in Code node $json is each item.json already.\n  // We'll still handle arrays & nested.\n  const { htmlCandidates, textCandidates, warnings: scanWarnings } = deepFindCandidates(raw);\n  warnings.push(...scanWarnings);\n\n  if (htmlCandidates.length) return { kind: 'html', value: htmlCandidates[0], warnings };\n  if (textCandidates.length) return { kind: 'text', value: textCandidates[0], warnings };\n\n  // Last resort: stringify\n  const s = safeString(raw);\n  if (looksLikeHtml(s)) return { kind: 'html', value: s, warnings: [...warnings, 'picked from JSON.stringify'] };\n  if (s.length > 300) return { kind: 'text', value: s, warnings: [...warnings, 'picked from JSON.stringify'] };\n\n  return { kind: 'empty', value: '', warnings: [...warnings, 'no suitable input found'] };\n}\n\nfunction firstMatch(re, str) {\n  const m = re.exec(str);\n  return m ? m[1] : '';\n}\n\nfunction cleanHtml(html) {\n  return String(html)\n    .replace(/<!doctype[^>]*>/ig, '')\n    .replace(/<script[\\s\\S]*?<\\/script>/ig, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/ig, ' ')\n    .replace(/<noscript[\\s\\S]*?<\\/noscript>/ig, ' ')\n    .replace(/<svg[\\s\\S]*?<\\/svg>/ig, ' ')\n    .replace(/<iframe[\\s\\S]*?<\\/iframe>/ig, ' ')\n    .replace(/<!--[\\s\\S]*?-->/g, ' ')\n    .replace(/<(header|footer|nav|aside)\\b[\\s\\S]*?<\\/\\1>/ig, ' ');\n}\n\nfunction extractMeta(html) {\n  const title =\n    firstMatch(/<meta[^>]+property=[\"']og:title[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+name=[\"']twitter:title[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    decodeHtmlEntities(firstMatch(/<title[^>]*>([\\s\\S]*?)<\\/title>/i, html)).trim();\n\n  const description =\n    firstMatch(/<meta[^>]+property=[\"']og:description[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+name=[\"']twitter:description[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html);\n\n  const author =\n    firstMatch(/<meta[^>]+name=[\"']author[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+property=[\"']article:author[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+name=[\"']parsely-author[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html);\n\n  const published =\n    firstMatch(/<meta[^>]+property=[\"']article:published_time[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+property=[\"']og:updated_time[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<meta[^>]+name=[\"']date[\"'][^>]+content=[\"']([^\"']+)[\"']/i, html) ||\n    firstMatch(/<time[^>]+datetime=[\"']([^\"']+)[\"'][^>]*>/i, html);\n\n  return {\n    title: decodeHtmlEntities(title || '').trim(),\n    description: decodeHtmlEntities(description || '').trim(),\n    author: decodeHtmlEntities(author || '').trim(),\n    published_at: decodeHtmlEntities(published || '').trim(),\n  };\n}\n\nfunction normalizeJsonLdNode(n) {\n  if (!n || typeof n !== 'object') return null;\n  const type = n['@type'];\n  const tStr = Array.isArray(type) ? type.map(String).join(' ') : String(type || '');\n  const isArticle = /article|newsarticle|blogposting|report|review/i.test(tStr);\n\n  if (!isArticle) return null;\n\n  // Candidates for body-like fields\n  const body =\n    (typeof n.articleBody === 'string' && n.articleBody) ||\n    (typeof n.text === 'string' && n.text) ||\n    (typeof n.description === 'string' && n.description) ||\n    '';\n\n  const headline =\n    (typeof n.headline === 'string' && n.headline) ||\n    (typeof n.name === 'string' && n.name) ||\n    '';\n\n  let author = '';\n  // author can be string/object/array\n  if (typeof n.author === 'string') author = n.author;\n  else if (Array.isArray(n.author)) {\n    const a0 = n.author.find(x => typeof x === 'string' || (x && typeof x === 'object'));\n    if (typeof a0 === 'string') author = a0;\n    else if (a0 && typeof a0 === 'object') author = a0.name || a0['@id'] || '';\n  } else if (n.author && typeof n.author === 'object') {\n    author = n.author.name || n.author['@id'] || '';\n  }\n\n  const date =\n    n.datePublished || n.dateCreated || n.dateModified || '';\n\n  const desc = (typeof n.description === 'string' && n.description) || '';\n\n  return {\n    title: decodeHtmlEntities(headline).trim(),\n    description: decodeHtmlEntities(desc).trim(),\n    author: decodeHtmlEntities(author).trim(),\n    published_at: decodeHtmlEntities(String(date || '')).trim(),\n    body: decodeHtmlEntities(String(body || '')).trim(),\n  };\n}\n\nfunction extractFromJsonLd(originalHtml) {\n  const scripts = [...String(originalHtml).matchAll(/<script[^>]+type=[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/ig)]\n    .map(m => m[1].trim())\n    .filter(Boolean);\n\n  let best = null;\n\n  for (const s of scripts) {\n    let parsed;\n    try { parsed = JSON.parse(s); } catch { continue; }\n\n    const nodes = Array.isArray(parsed) ? parsed : [parsed];\n    const expanded = [];\n    for (const n of nodes) {\n      if (n && typeof n === 'object' && Array.isArray(n['@graph'])) expanded.push(...n['@graph']);\n      else expanded.push(n);\n    }\n\n    for (const n of expanded) {\n      const norm = normalizeJsonLdNode(n);\n      if (!norm) continue;\n\n      const score = (norm.body?.length || 0) + (norm.title ? 200 : 0) + (norm.published_at ? 50 : 0);\n      if (!best || score > best.score) best = { ...norm, score };\n    }\n  }\n\n  if (best && best.body && best.body.length > 250) {\n    return best;\n  }\n  return null;\n}\n\nfunction extractArticleTag(html) {\n  const m = /<article\\b[^>]*>([\\s\\S]*?)<\\/article>/i.exec(html);\n  return m ? m[1] : '';\n}\nfunction extractMainTag(html) {\n  const m = /<main\\b[^>]*>([\\s\\S]*?)<\\/main>/i.exec(html);\n  return m ? m[1] : '';\n}\n\nfunction sanitizeForContent(htmlFragment) {\n  return String(htmlFragment)\n    .replace(/<(form|button)\\b[\\s\\S]*?<\\/\\1>/ig, ' ')\n    .replace(/<div\\b[^>]*class=[\"'][^\"']*(comment|share|social|newsletter|subscribe|related|promo|ad|advert|cookie|nav|footer|header)[^\"']*[\"'][^>]*>[\\s\\S]*?<\\/div>/ig, ' ')\n    .replace(/<ul\\b[^>]*class=[\"'][^\"']*(nav|menu)[^\"']*[\"'][^>]*>[\\s\\S]*?<\\/ul>/ig, ' ');\n}\n\nfunction scoreBlock(htmlFragment) {\n  const frag = String(htmlFragment || '');\n  const pCount = (frag.match(/<p\\b/gi) || []).length;\n  const liCount = (frag.match(/<li\\b/gi) || []).length;\n  const aCount = (frag.match(/<a\\b/gi) || []).length;\n  const hCount = (frag.match(/<h[1-6]\\b/gi) || []).length;\n\n  const text = stripTags(frag);\n  const len = text.length;\n\n  // Penalize link density and very short blocks\n  const linkPenalty = Math.min(0.7, aCount / Math.max(1, pCount + liCount + 1));\n  const shortPenalty = len < 400 ? (400 - len) : 0;\n\n  return (len * 1.0) + (pCount * 220) + (liCount * 90) + (hCount * 60) - (len * linkPenalty) - shortPenalty;\n}\n\nfunction extractByHeuristics(html) {\n  const candidates = [];\n\n  const article = extractArticleTag(html);\n  if (article) candidates.push({ method: 'article-tag', html: article });\n\n  const main = extractMainTag(html);\n  if (main) candidates.push({ method: 'main-tag', html: main });\n\n  const patterns = [\n    /<div\\b[^>]+id=[\"'][^\"']*(content|article|post|story|body|main|page|entry)[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/div>/ig,\n    /<div\\b[^>]+class=[\"'][^\"']*(content|article|post|story|body|main|entry|read|text|copy|markdown|rich-text)[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/div>/ig,\n    /<section\\b[^>]+class=[\"'][^\"']*(content|article|post|story|body|entry|main)[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/section>/ig,\n  ];\n\n  for (const re of patterns) {\n    let m;\n    let guard = 0;\n    while ((m = re.exec(html)) && guard++ < 60) {\n      const frag = m[2] || m[1] || '';\n      if (frag && frag.length > 600) candidates.push({ method: 'container-heuristic', html: frag });\n    }\n  }\n\n  // If still nothing, consider the whole doc (but sanitized later)\n  if (!candidates.length) candidates.push({ method: 'fallback-whole-doc', html });\n\n  let best = null;\n  for (const c of candidates) {\n    const s = scoreBlock(c.html);\n    if (!best || s > best.score) best = { ...c, score: s };\n  }\n  return best;\n}\n\nfunction extractReadableHtml(cleanedHtml) {\n  const picked = extractByHeuristics(cleanedHtml);\n  const pruned = sanitizeForContent(picked.html);\n\n  const safe = String(pruned)\n    .replace(/<(div|span)\\b[^>]*>/ig, '\\n')\n    .replace(/<\\/(div|span)\\s*>/ig, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n\n  const text = stripTags(safe);\n\n  if (text.length < 250) {\n    const fallbackText = stripTags(cleanedHtml);\n    return { method: picked.method + '+fallback-strip', content_html: '', content_text: fallbackText };\n  }\n\n  return { method: picked.method, content_html: safe, content_text: text };\n}\n\nfunction normalizeOutput(base, extracted) {\n  const title = (extracted.title || base.title || '').trim();\n  const description = (extracted.description || base.description || '').trim();\n  const author = (extracted.author || base.author || '').trim();\n  const published_at = (extracted.published_at || base.published_at || '').trim();\n  const content_text = (extracted.content_text || '').trim();\n  const content_html = (extracted.content_html || '').trim();\n\n  return {\n    title,\n    description,\n    author,\n    published_at,\n    content_text,\n    content_html,\n    word_count: wordCount(content_text),\n  };\n}\n\n// -------------------- main --------------------\nconst raw = $json;\nconst picked = pickInput(raw);\n\nconst empty = {\n  title: '',\n  description: '',\n  author: '',\n  published_at: '',\n  content_text: '',\n  content_html: '',\n  word_count: 0,\n  method: 'no-input',\n  warnings: picked.warnings || [],\n};\n\n// Case 1: already extracted JSON -> normalize and return\nif (picked.kind === 'extracted-json') {\n  const obj = picked.value || {};\n  const out = normalizeOutput(\n    { title: '', description: '', author: '', published_at: '' },\n    {\n      title: safeString(obj.title || ''),\n      description: safeString(obj.description || ''),\n      author: safeString(obj.author || ''),\n      published_at: safeString(obj.published_at || ''),\n      content_text: safeString(obj.content_text || ''),\n      content_html: safeString(obj.content_html || ''),\n    }\n  );\n\n  return [{\n    json: {\n      ...out,\n      method: safeString(obj.method || 'normalize(extracted-json)'),\n      warnings: (picked.warnings || []).concat(obj.warnings || []),\n    }\n  }];\n}\n\n// Case 2: plain text input (no HTML) -> return as content_text\nif (picked.kind === 'text') {\n  const text = String(picked.value || '').trim();\n  const out = normalizeOutput({ title: '', description: '', author: '', published_at: '' }, { content_text: text, content_html: '' });\n\n  const warnings = (picked.warnings || []).concat(['input was not HTML; treated as plain text']);\n  return [{\n    json: {\n      ...out,\n      method: 'plain-text',\n      warnings,\n    }\n  }];\n}\n\n// Case 3: HTML -> full extraction\nif (picked.kind === 'html') {\n  const html = String(picked.value || '');\n\n  if (html.trim().length < 50) {\n    return [{ json: { ...empty, method: 'no-html-or-too-short' } }];\n  }\n\n  const meta = extractMeta(html);\n\n  // JSON-LD best path\n  const jsonLd = extractFromJsonLd(html);\n  if (jsonLd && jsonLd.body) {\n    // Merge meta + json-ld (json-ld wins if it has values)\n    const mergedMeta = {\n      title: jsonLd.title || meta.title,\n      description: jsonLd.description || meta.description,\n      author: jsonLd.author || meta.author,\n      published_at: jsonLd.published_at || meta.published_at,\n    };\n\n    const body = jsonLd.body.trim();\n    const out = normalizeOutput(mergedMeta, { content_text: body, content_html: '' });\n\n    const warnings = (picked.warnings || []);\n    if (out.content_text.length < 400) warnings.push('json-ld body was short; site may be truncating articleBody/text');\n\n    return [{\n      json: {\n        ...out,\n        method: 'json-ld(articleBody|text|description)',\n        warnings,\n      }\n    }];\n  }\n\n  // Heuristic extraction\n  const cleaned = cleanHtml(html);\n  const extracted = extractReadableHtml(cleaned);\n\n  const out = normalizeOutput(meta, extracted);\n\n  const warnings = (picked.warnings || []);\n  if (out.content_text.length < 300) warnings.push('extracted text is short; input may be partial HTML or JS-rendered page');\n  if (!out.title) warnings.push('missing title');\n  if (!out.published_at) warnings.push('missing published_at');\n\n  return [{\n    json: {\n      ...out,\n      method: extracted.method,\n      warnings,\n    }\n  }];\n}\n\n// Fallback: nothing\nreturn [{ json: empty }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        1568
+      ],
+      "id": "07aaeb92-9676-464b-b6ce-58ceb70a482b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=\nورودی\n\nورودی در انتهای همین پیام و داخل بلوک INPUT قرار می‌گیرد و می‌تواند هرکدام از حالت‌های زیر باشد (یا ترکیبی از آن‌ها):\n\nآرایه مقاله‌ها Articles[]\nهر آیتم ممکن است شامل کلیدهایی مثل:\ntitle, description, author, published_at\ncontent_text, content_html\nword_count, method, warnings\nیا کلیدهای مشابه\n\nآبجکت تکی (یک مقاله)\nممکن است مقاله داخل کلیدهایی مثل data, article, item, items, result, payload, response باشد.\n\nرشته (String)\nممکن است:\nJSON string باشد،\nیا HTML خام،\nیا متن خام بدون ساختار.\n\nورودی‌های ناقص/کثیف\nممکن است بعضی فیلدها خالی باشند، یا متن تبلیغاتی/تکراری/CTA زیاد داشته باشد.\n\nوظیفه کلی\n\nورودی را کامل و دقیق parse و نرمال‌سازی کن تا به «لیستی از مقاله‌ها» برسی؛ اگر نتوانستی، آن را یک مقالهٔ واحد فرض کن.\n\nاگر چند مقاله وجود داشت، بهترین مقالهٔ اصلی را انتخاب کن.\n\nاز مقالهٔ انتخاب‌شده، یک محتوای فارسی روان، بومی و سئو محور تولید کن (نه ترجمهٔ تحت‌اللفظی).\n\nخروجی را فقط به صورت یک JSON معتبر با کلیدهای مشخص تولید کن.\n\nگام 1) نرمال‌سازی و استخراج مقاله‌ها (Robust Parsing)\n\nاگر INPUT یک string است:\nاول تلاش کن آن را به JSON تبدیل کنی (اگر شبیه JSON بود).\nاگر JSON نبود ولی شبیه HTML بود، آن را به عنوان متن خام/HTML تلقی کن.\n\nاگر INPUT آبجکت است:\nاگر داخل کلیدهای شناخته‌شده (data/article/item/items/result/payload/response) مقاله یا آرایه مقاله وجود دارد، همان را استخراج کن.\n\nدر نهایت باید به یکی از این‌ها برسی:\narticles: Article[] (ترجیحاً)\nیا singleArticle: Article\n\nArticle نرمال‌شده را با این کلیدها بساز (حتی اگر برخی خالی باشد):\ntitle, description, author, published_at\ncontent_text, content_html\nword_count (اگر نبود، خودت از روی متن محاسبه کن)\nmethod, warnings (اختیاری؛ صرفاً برای تصمیم‌گیری داخلی)\n\nگام 2) انتخاب مقالهٔ اصلی (اگر آرایه بود)\n\nاگر ورودی آرایه است، باید فقط یک مقاله را انتخاب کنی.\n\nمعیارهای انتخاب (به ترتیب اولویت)\n\nبرای هر مقاله یک امتیاز بساز:\nکیفیت و میزان محتوای مفید\n\nمتن مفید یعنی: پاراگراف‌های خبری/تحلیلی، اطلاعات واقعی، توضیح رویداد/ویژگی‌ها/قیمت‌ها\nمتن غیرمفید یعنی: CTA تکراری، دعوت به عضویت، لینک‌دهی زیاد، تبلیغ محض، تکرارهای زیاد، فهرست‌های فروشگاهی بدون زمینه\n\nاگر content_text موجود است، آن را مرجع اصلی قرار بده.\nاگر content_text نبود ولی content_html هست، از آن متن استخراج کن (remove tags) و سپس ارزیابی کن.\n\nبیشترین word_count\nاگر word_count نیست، با شمردن کلمات content_text محاسبه کن.\nاگر متن کوتاه است ولی پر از CTA است، امتیازش را کاهش بده.\n\nدر صورت نزدیکی امتیازها\nعنوان واضح‌تر، خبری‌تر و خاص‌تر\nمتن کامل‌تر و «کم‌حذفی‌تر» (پیوستگی پاراگراف‌ها، نبودن قطع‌شدگی ناگهانی)\n\nخروجی انتخاب\nاگر ورودی آرایه بود: chosen_index همان ایندکس در آرایه اصلی باشد.\nاگر آرایه نبود: chosen_index = 0.\nهمچنین یک reason کوتاه و دقیق بنویس که چرا این مقاله انتخاب شد.\n\nگام 3) پاکسازی محتوای ورودی قبل از نوشتن (De-noising)\n\nقبل از تولید محتوای فارسی:\nبخش‌های بسیار تبلیغاتی / CTA / signup / newsletter / “buy now” / “see all deals” را حذف یا خنثی کن.\nلینک‌ها را در متن نیاور (مگر اسم فروشگاه/پلتفرم لازم باشد).\nتکرارها را حذف کن.\n\nاما اطلاعات کلیدی را نگه دار:\nقیمت‌ها، تخفیف‌ها، درصدها، نام محصول/بازی/انیمه، نسخه‌ها (LE/Steelbook/4K)، فروشگاه‌ها (Amazon/Walmart)\n\nاگر قیمت/تخفیف/لیست محصولات وجود دارد:\nداده‌ها را قابل اسکن و مرتب ارائه کن.\n\nقانون مهم: اگر در ورودی تاریخ/عدد/ادعای دقیق وجود ندارد، حدس نزن و قطعی ننویس.\n\nگام 4) تولید محتوای فارسی سئو محور (نه ترجمه)\n\nترجمه کلمه‌به‌کلمه ممنوع.\nخروجی باید بازنویسی طبیعی، روان، بومی و مناسب مخاطب فارسی باشد.\nلحن: خبری/تحلیلی، حرفه‌ای، بدون اغراق.\nاسم‌های انگلیسی را درست نگه دار.\n\nساختار Markdown الزامی\nدر summary_markdown دقیقاً این الگو را رعایت کن:\nمقدمه کوتاه (۲ تا ۴ جمله)\nچند تیتر ## و در صورت نیاز ###\nحداقل یک بخش با بولت‌لیست از نکات مهم\nجمع‌بندی پایانی کوتاه\n\nاگر محتوای قیمت/تخفیف داشت:\nحتماً یک بخش جدا اضافه کن:\n## قیمت و تخفیف‌ها یا ## بهترین پیشنهادها\n\nگام 5) طبقه‌بندی و متادیتا\n\ncategory_slug یکی از این‌ها (فقط یکی):\ngame-news | anime | tech | shopping-deals\n\nseries_slug همیشه:\ndaily-digest\n\ntags (۶ تا ۱۲ مورد)\nتگ‌ها فارسی، کوتاه، کاربردی، بدون تکرار\n\nfocus_keywords (۳ تا ۸ مورد)\nترکیبی از فارسی + نام‌های انگلیسی مهم\n\nمحدودیت‌های سخت خروجی\n\nخروجی باید دقیقاً یک JSON معتبر باشد و هیچ متن اضافه‌ای بیرون از JSON نداشته باشد.\n\nکلیدهای خروجی باید دقیقاً این‌ها باشند (نه کمتر، نه بیشتر):\n\n{\n\"summary_markdown\": \"…\",\n\"title\": \"…\",\n\"title_variants\": [\"…\"],\n\"excerpt\": \"…\",\n\"seo_title\": \"…\",\n\"seo_description\": \"…\",\n\"category_slug\": \"game-news | anime | tech | shopping-deals\",\n\"series_slug\": \"daily-digest\",\n\"tags\": [\"…\"],\n\"focus_keywords\": [\"…\"],\n\"chosen_index\": 0,\n\"reason\": \"…\"\n}\n\nقوانین کلیدی روی فیلدها\n\nexcerpt:\nفارسی و روان\n۱ تا ۲ جمله\nحداکثر حدود ۲۲۰ کاراکتر\n\nseo_title حدود 50 تا 60 کاراکتر فارسی (تقریبی، نزدیک به این بازه)\nseo_description حدود 140 تا 160 کاراکتر فارسی (تقریبی) — اگر بلند شد کوتاه کن\n\ntitle_variants بین 4 تا 8 مورد\ntags بین 6 تا 12 مورد\nfocus_keywords بین 3 تا 8 مورد\n\nداخل JSON کاراکتر کنترلی نامعتبر نگذار.\n\nاگر محتوا واقعاً خالی بود:\nیک متن عمومی کوتاه و غیرحدسی تولید کن\nاما همه کلیدها را کامل پر کن\n\nحالا اجرا کن\n\nبا توجه به INPUT زیر، مراحل بالا را انجام بده و فقط همان JSON خروجی را تولید کن.\n\n======== INPUT ========\n{{ JSON.stringify($json) }}\n======== END INPUT ========\n",
+        "options": {
+          "systemMessage": "تو یک نویسنده و ویراستار حرفه‌ای محتوای فارسی برای وب‌سایت اخبار و مقالات هستی. \nوظیفه تو این است که از روی داده ورودی (که معمولاً آرایه‌ای از مقاله‌هاست)، محتوای مقاله/صفحه را کامل بخوانی، تمیز کنی، مفهوم اصلی را استخراج کنی، سپس یک متن فارسی جذاب و سئو-محور تولید کنی.\n\nخروجی تو باید فقط و فقط یک JSON معتبر باشد و هیچ متن اضافی (حتی توضیح) خارج از JSON ننویسی.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -672,
+        1568
+      ],
+      "id": "126496e8-6efc-4fda-848a-092457caa92e",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        1792
+      ],
+      "id": "2784e1a6-c281-416f-9787-7c67a5e93bca",
+      "name": "Google Gemini Chat Model3",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YtU7J5m2EweUzwOC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/users/auth/admin-login/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"username\": \"amir\", \"password\": \"@mir1385514\" } }}",
+        "options": {}
+      },
+      "name": "Auth Tokens",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -4384,
+        1920
+      ],
+      "id": "14b52658-ad63-40a8-b84b-3466b1e317c3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://atom-game.ir/api/token/refresh/",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "refresh",
+              "value": "={{$items(\"Auth Tokens\")[0].json.refresh.trim()}}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Auth Refresh",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -320,
+        1568
+      ],
+      "id": "e120f0fc-772b-4516-81fd-8bb80ff6eee1"
+    },
+    {
+      "parameters": {
+        "functionCode": "const agent2 = $('AI Agent2').first().json;\nconst raw = agent2.output || agent2.text || agent2.response || agent2;\n\n// Excerpt from previous node (current incoming item)\nconst previousExcerpt = (typeof $json.excerpt === 'string' ? $json.excerpt : '').trim();\n\nfunction collapseSpaces(s) {\n  return (s || '')\n    .replace(/[\\r\\n]+/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction stripCodeFences(s) {\n  if (typeof s !== 'string') return '';\n  let t = s.trim();\n  t = t.replace(/^```[a-zA-Z0-9_-]*\\s*/m, '');\n  t = t.replace(/```$/m, '');\n  t = t.replace(/```/g, '');\n  t = t.replace(/^json\\s*/i, '');\n  return t.trim();\n}\n\nfunction extractSummaryMarkdownFromBrokenJsonString(s) {\n  if (typeof s !== 'string') return '';\n  const t = stripCodeFences(s);\n\n  const m = t.match(/\"summary_markdown\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"/);\n  if (!m) return '';\n\n  try {\n    return JSON.parse(`\"${m[1]}\"`);\n  } catch (e) {\n    return m[1]\n      .replace(/\\\\\"/g, '\"')\n      .replace(/\\\\n/g, '\\n')\n      .replace(/\\\\r/g, '\\r')\n      .replace(/\\\\t/g, '\\t')\n      .replace(/\\\\\\\\/g, '\\\\');\n  }\n}\n\nfunction sanitizePossiblyJsonishText(s) {\n  if (typeof s !== 'string') return '';\n  const cleaned = stripCodeFences(s);\n\n  if (cleaned.includes('\"summary_markdown\"')) {\n    const extracted = extractSummaryMarkdownFromBrokenJsonString(cleaned);\n    if (extracted) return extracted;\n  }\n\n  if (/^[\\[{]/.test(cleaned)) {\n    try {\n      const obj = JSON.parse(cleaned);\n      if (obj && typeof obj === 'object') {\n        if (typeof obj.excerpt === 'string') return stripCodeFences(obj.excerpt);\n        if (typeof obj.seo_description === 'string') return stripCodeFences(obj.seo_description);\n        if (typeof obj.summary_markdown === 'string') return obj.summary_markdown;\n        if (typeof obj.summary === 'string') return obj.summary;\n      }\n    } catch (e) {}\n  }\n\n  return cleaned;\n}\n\nlet meta;\ntry {\n  meta = typeof raw === 'string' ? JSON.parse(stripCodeFences(raw)) : raw;\n} catch (e) {\n  const fallbackSummary = typeof raw === 'string' ? raw : JSON.stringify(raw);\n  meta = {\n    summary_markdown: fallbackSummary,\n    title: 'خلاصه مهم‌ترین خبرهای بازی امروز',\n    seo_title: 'خلاصه مهم‌ترین خبرهای بازی امروز',\n    seo_description: '',\n    category_slug: 'game-news',\n    series_slug: 'daily-digest',\n    tags: ['اخبار بازی'],\n    focus_keywords: [],\n    chosen_index: 0,\n    reason: 'fallback – JSON parse error'\n  };\n}\n\nconst summary = (meta.summary_markdown || meta.summary || '').toString().trim();\nconst baseExcerptFromSummary = collapseSpaces(summary).slice(0, 220);\n\nlet excerptCandidate =\n  (typeof meta.excerpt === 'string' && meta.excerpt.trim())\n    ? meta.excerpt\n    : (previousExcerpt || baseExcerptFromSummary);\n\nexcerptCandidate = collapseSpaces(sanitizePossiblyJsonishText(excerptCandidate)).slice(0, 220);\nconst excerpt = excerptCandidate || baseExcerptFromSummary;\n\nconst title =\n  (typeof meta.title === 'string' && meta.title.trim())\n    ? meta.title.trim()\n    : 'خلاصه مهم‌ترین خبرهای بازی امروز';\n\nconst seoTitle =\n  (typeof meta.seo_title === 'string' && meta.seo_title.trim())\n    ? collapseSpaces(sanitizePossiblyJsonishText(meta.seo_title)).slice(0, 60)\n    : title;\n\nlet seoDescCandidate =\n  (typeof meta.seo_description === 'string' && meta.seo_description.trim())\n    ? meta.seo_description\n    : excerpt;\n\nseoDescCandidate = collapseSpaces(sanitizePossiblyJsonishText(seoDescCandidate)).slice(0, 160);\nconst seoDescription = seoDescCandidate || excerpt;\n\nconst titleVariants = Array.isArray(meta.title_variants) ? meta.title_variants : [];\nconst focusKeywords = Array.isArray(meta.focus_keywords) ? meta.focus_keywords : [];\nconst chosenIndex = Number.isInteger(meta.chosen_index) ? meta.chosen_index : 0;\n\nreturn [{\n  json: {\n    summary_markdown: summary,\n    title,\n    title_variants: titleVariants,\n    excerpt,\n    seo_title: seoTitle,\n    seo_description: seoDescription,\n    category_slug: meta.category_slug || 'game-news',\n    series_slug: meta.series_slug || 'daily-digest',\n    tags: Array.isArray(meta.tags) ? meta.tags : ['اخبار بازی'],\n    focus_keywords: focusKeywords,\n    chosen_index: chosenIndex,\n    selection_reason: meta.reason || ''\n  }\n}];\n"
+      },
+      "name": "Ai parser",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        1568
+      ],
+      "id": "28b19182-0170-4270-858f-2bcc01fa8d72"
+    },
+    {
+      "parameters": {
+        "jsCode": "let { summary_markdown, seo_description } = $json;\n\n// --- NEW: اگر summary_markdown اشتباهاً داخل ```json ...``` یک JSON کامل بود، استخراج و جایگزین کن\nfunction unwrapJsonFromMarkdownFence(s) {\n  if (typeof s !== 'string') return null;\n\n  const trimmed = s.trim();\n\n  // حالت: کل متن داخل کدبلاک ```json ... ```\n  const fenced = trimmed.match(/```(?:json)?\\s*([\\s\\S]*?)\\s*```/i);\n  const candidate = (fenced ? fenced[1] : trimmed).trim();\n\n  // اگر candidate خودش یک آبجکت JSON بود، همون رو parse کن\n  const start = candidate.indexOf('{');\n  const end = candidate.lastIndexOf('}');\n  if (start === -1 || end === -1 || end <= start) return null;\n\n  const jsonText = candidate.slice(start, end + 1);\n\n  try {\n    const obj = JSON.parse(jsonText);\n    if (obj && typeof obj === 'object') return obj;\n  } catch (e) {\n    return null;\n  }\n  return null;\n}\n\nconst extracted = unwrapJsonFromMarkdownFence(summary_markdown);\nif (extracted) {\n  // اگر AI اشتباهاً JSON رو گذاشته تو summary_markdown، فیلدها رو ازش بیرون بکش\n  summary_markdown = extracted.summary_markdown ?? summary_markdown;\n  seo_description = extracted.seo_description ?? seo_description;\n\n  // اگر title/seo_title/tags/... هم اومده بود، روی item هم اعمالش کن\n  for (const k of [\n    'title','title_variants','excerpt','seo_title','category_slug','series_slug',\n    'tags','focus_keywords','chosen_index','reason','selection_reason'\n  ]) {\n    if (extracted[k] !== undefined) $json[k] = extracted[k];\n  }\n}\n\n// --- ORIGINAL LOGIC\nfunction cleanUrl(u) {\n  try {\n    const url = new URL(u);\n    const badParams = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','fbclid','gclid','ref'];\n    badParams.forEach(p => url.searchParams.delete(p));\n    return url.toString();\n  } catch (e) {\n    return u;\n  }\n}\n\nsummary_markdown = summary_markdown || '';\nseo_description = seo_description || '';\n\nconst urlRegex = /(https?:\\/\\/[^\\s)]+[^\\s)\\.,!?])/g;\nsummary_markdown = summary_markdown.replace(urlRegex, (m) => cleanUrl(m));\nseo_description = seo_description.replace(urlRegex, (m) => cleanUrl(m));\n\nconst ytRegex = /(https?:\\/\\/(?:www\\.)?(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/)([A-Za-z0-9_-]{6,}))/g;\nsummary_markdown = summary_markdown.replace(ytRegex, (match, url, vid) => {\n  const id = vid;\n  return `\\n<iframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/${id}\" frameborder=\"0\" allowfullscreen></iframe>\\n`;\n});\n\nconst textForLang = (summary_markdown || seo_description || '').slice(0, 1000);\nconst hasArabic = /[\\u0600-\\u06FF]/.test(textForLang);\nconst lang = hasArabic ? 'fa' : 'en';\n\n// --- NEW: content = summary (fallback: seo_description)\nconst content = (summary_markdown && summary_markdown.trim())\n  ? summary_markdown\n  : (seo_description || '');\n\nreturn [{\n  json: {\n    ...$json,\n    summary_markdown,\n    seo_description,\n    lang,\n    content\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        1712
+      ],
+      "id": "4298c33b-6247-4548-841e-57305828e29f",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2720,
+        1056
+      ],
+      "id": "9163031e-4311-4e36-b629-79f56ec637dc",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node\nreturn items.filter((item) => {\n  const obj = item.json ?? {};\n\n  // اگر هیچ کلیدی نداشته باشه => خالیه\n  const keys = Object.keys(obj);\n  if (keys.length === 0) return false;\n\n  // اگر همه‌ی مقدارها خالی/نامعتبر باشن هم حذفش کن\n  // (null, undefined, \"\", [], {} )\n  const hasMeaningfulValue = keys.some((k) => {\n    const v = obj[k];\n    if (v === null || v === undefined) return false;\n    if (typeof v === \"string\" && v.trim() === \"\") return false;\n    if (Array.isArray(v) && v.length === 0) return false;\n    if (typeof v === \"object\" && !Array.isArray(v) && Object.keys(v).length === 0) return false;\n    return true;\n  });\n\n  return hasMeaningfulValue;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        1472
+      ],
+      "id": "e489ad70-38a4-48d9-b951-0207d4a72ce5",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node\nreturn items.filter((item) => {\n  const obj = item.json ?? {};\n\n  // اگر هیچ کلیدی نداشته باشه => خالیه\n  const keys = Object.keys(obj);\n  if (keys.length === 0) return false;\n\n  // اگر همه‌ی مقدارها خالی/نامعتبر باشن هم حذفش کن\n  // (null, undefined, \"\", [], {} )\n  const hasMeaningfulValue = keys.some((k) => {\n    const v = obj[k];\n    if (v === null || v === undefined) return false;\n    if (typeof v === \"string\" && v.trim() === \"\") return false;\n    if (Array.isArray(v) && v.length === 0) return false;\n    if (typeof v === \"object\" && !Array.isArray(v) && Object.keys(v).length === 0) return false;\n    return true;\n  });\n\n  return hasMeaningfulValue;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        784
+      ],
+      "id": "c59de10b-f9d5-4dff-87eb-d0da39c9a740",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=پرامپت بهینه‌شده (برای خروجی یکسان و خام)\n\nورودی:\n{{ JSON.stringify($json, null, 2) }}\n\n========================\nهدف\nاز روی داده‌های ورودی (ممکن است آرایه باشد)، یک خروجی JSON «آماده ارسال به API» برای ساخت پست بساز.\nتا جای ممکن باید همه فیلدها را از خود ورودی پر کنی و فقط بخش متن/ساختار مقاله را تولید کنی.\n\nاگر ورودی آرایه است فقط item[0] منبع اصلی است:\nsource = Array.isArray(input) ? input[0] : input\n\n========================\nقواعد حیاتی خروجی (خیلی مهم)\n\nخروجی باید دقیقاً و فقط یک JSON object خام باشد.\n\nخروجی نباید آرایه باشد.\n\nخروجی نباید داخل باشد.\n\nخروجی نباید داخل کلیدهایی مثل \"output\" / \"result\" / \"data\" قرار بگیرد.\n\nهیچ متن اضافه‌ای قبل یا بعد از JSON ننویس.\n\nفقط کلیدهای اسکیمای مجاز را تولید کن. کلید اضافی ممنوع.\n\nگذاشتن null فقط برای published_at / scheduled_at / cover_media_id / og_image_id مجاز است.\n\n========================\nاسکیمای مجاز خروجی (فقط همین کلیدها)\n{\n\"title\": \"string\",\n\"excerpt\": \"string\",\n\"content\": \"string\",\n\"status\": \"draft|published|scheduled\",\n\"visibility\": \"public\",\n\"published_at\": \"string|null\",\n\"scheduled_at\": \"string|null\",\n\"series\": \"number\",\n\"seo_title\": \"string\",\n\"seo_description\": \"string\",\n\"slug\": \"string\",\n\"canonical_url\": \"string\",\n\"tag_ids\": \"number[]\",\n\"category_id\": \"number\",\n\"cover_media_id\": \"number|null\",\n\"og_image_id\": \"number|null\"\n}\n\n========================\nاولویت استفاده از داده‌های ورودی (خیلی مهم)\nاین فیلدها را «حتماً تا جای ممکن» از source پر کن:\n\ncategory_id\n\nاگر source.category_id عددی بود، همان را خروجی بده.\n\nاگر نبود، 0.\n\nseries\n\nاگر source.series عددی بود، همان را خروجی بده.\n\nاگر نبود و source.series_id عددی بود، همان را به series نگاشت کن.\n\nاگر هیچ‌کدام نبود، 0.\n\ntag_ids\n\nاگر source.tag_ids آرایه عددی بود، همان را (فقط عدد، یکتا) خروجی بده.\n\nاگر نبود، [].\n\ntitle\n\nاز source.title\n\nاگر source.title_variants بود، فقط در صورت نیاز برای بهتر کردن عنوان استفاده کن؛ موضوع را تغییر نده.\n\ncanonical_url و slug\n\ncanonical_url: اگر source.canonical_url داشت همان، وگرنه \"\"\n\nslug: اگر source.slug داشت همان؛ وگرنه یک slug انگلیسی بساز (lowercase فقط a-z0-9- و - ، 3 تا 8 کلمه).\n\nvisibility\n\nاگر source.visibility یکی از \"public\" | \"private\" بود همان را بده.\n\nدر غیر این صورت \"public\".\n\n========================\nقانون طلایی تصاویر (ست کردن cover/og + عکس داخل content)\nاگر source.media[] وجود دارد:\n\nvalid_images را بساز با شرایط:\n\ntype === \"image\"\n\nurl وجود داشته باشد و با http/https شروع شود\n\nid عددی داشته باشد (بدون id => نامعتبر)\n\nwidth و height عددی باشند و width>=200 و height>=120\n\nwidth===1 یا height===1 => حذف\n\ntitle شامل \"blank.gif\" یا url شامل \"blank\" => حذف\n\nاگر valid_images.length >= 1:\n\ncover_media_id = id بزرگ‌ترین تصویر (بیشترین width؛ اگر مساوی بود height بیشتر؛ اگر باز مساوی بود اولین)\n\nog_image_id = همان cover_media_id\n\nگذاشتن null ممنوع است.\n\nاگر valid_images خالی بود:\n\ncover_media_id = null\n\nog_image_id = null\n\n========================\nدرج تصاویر در content (داینامیک)\nاگر valid_images.length >= 1:\n\nتعداد تصاویر:\n\n1 => 1 تصویر\n\n2 => 2 تصویر\n\n3 => 3 تصویر\n\n=4 => 4 تصویر\n\nتصویر اول حتماً تصویر cover باشد (id = cover_media_id)\n\nبقیه بدون تکرار id، ترجیحاً متفاوت\n\nفرمت Markdown (حتماً همین):\n\n\nALT:\n\nفارسی، توصیفی، غیرتکراری، مرتبط\n\nاگر media.altText یا title موجود است، از آن برای بهتر شدن ALT استفاده کن ولی کپی کامل نکن.\n\nمحل درج:\n\nتصویر شاخص بعد از لید\n\nتصویر دوم وسط مقاله (بین H2ها)\n\nتصویر سوم نزدیک انتهای مقاله قبل از نکات کلیدی یا جمع‌بندی\n\nتصویر چهارم نزدیک جمع‌بندی (اگر بود)\n\nاگر valid_images خالی بود:\n\nهیچ تصویر در content نگذار (هیچ\nنباید باشد)\n\n========================\nساخت content (Markdown و سئوپسند)\ncontent باید:\n\nلید کوتاه 2-3 جمله\n\nحداقل 3 تیتر H2 با ##\n\nهر H2 حداقل یک پاراگراف مفید\n\nدر صورت نیاز H3 با ###\n\nیک بخش «نکات کلیدی» با bullet list (حداقل 5 مورد)\n\nیک «جمع‌بندی نهایی»\n\nپایه متن را از این اولویت بگیر:\n\nsource.content\n\nsource.summary_markdown\nاگر هیچ‌کدام نبود، متن عمومی و بدون ادعای جزئیات بنویس.\n\nSEO:\n\nکلمه کلیدی اصلی را طبیعی در title، پاراگراف اول، و حداقل یکی از H2ها بیاور.\n\nادعای تاریخ/عدد/جزئیات بیرونی بدون اینکه در ورودی باشد ممنوع.\n\n========================\nمتاها\nexcerpt: 1 تا 2 جمله خلاصه قوی\nseo_title: نزدیک title ولی بهینه‌تر و کوتاه‌تر\nseo_description: 140 تا 160 کاراکتر فارسی، کامل و واقعی، ناقص قطع‌شده نباشد\n\n========================\nstatus و تاریخ‌ها\npublished_at و scheduled_at:\n\nفقط اگر در source موجود و معتبر بود، وگرنه null\n\nstatus:\n\nاگر scheduled_at مقدار داشت => \"scheduled\"\n\nelse اگر published_at مقدار داشت => \"published\"\n\nelse => \"draft\"\n\n========================\nخروجی نهایی (اجباری)\nاگر valid_images.length >= 1:\n\ncover_media_id و og_image_id عدد باشند (نه null)\n\nتصویر cover حتماً داخل content درج شده باشد\n\ncontent حداقل یک\nداشته باشد\n\nاگر valid_images خالی بود:\n\ncover_media_id و og_image_id = null\n\ncontent هیچ\nنداشته باشد\n\n========================\nحالا فقط JSON نهایی را برگردان (بدون کدفنس و بدون آرایه و بدون کلید wrapper)",
+        "options": {
+          "systemMessage": "{\n\"instruction_update\": \"فقط و فقط یک JSON معتبر خروجی بده. هیچ متن اضافه‌ای قبل/بعد JSON ننویس. هیچ Markdown، هیچ ```، هیچ توضیحی، هیچ کلید اضافی/Wrapper مثل output/result/data نساز. تمام متن‌ها فارسی (fa) باشند به‌جز اسم‌های خاص (proper nouns).\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2944,
+        1056
+      ],
+      "id": "b07ec8bd-e3b5-4578-a987-870a0357f3fb",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        3024,
+        1280
+      ],
+      "id": "9adb2e7f-b4e9-471a-a655-21719135d56c",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YtU7J5m2EweUzwOC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Normalizer (Single Node)\n * هدف: تبدیل هر نوع خروجی (آرایه/کدفنس/output/...) به یک JSON object واحد و خام.\n */\n\nconst input = $json;\n\n// --- utils ---\nfunction safeJsonParse(s) {\n  try { return JSON.parse(s); } catch { return null; }\n}\n\nfunction stripCodeFences(s) {\n  if (typeof s !== 'string') return '';\n  return s\n    .replace(/^\\s*```(?:json)?\\s*/i, '')\n    .replace(/\\s*```\\s*$/i, '')\n    .trim();\n}\n\nfunction extractFirstJson(s) {\n  if (typeof s !== 'string') return null;\n  const t = stripCodeFences(s);\n\n  // direct parse\n  const direct = safeJsonParse(t);\n  if (direct && typeof direct === 'object') return direct;\n\n  // attempt to slice first {...}\n  const start = t.indexOf('{');\n  const end = t.lastIndexOf('}');\n  if (start !== -1 && end !== -1 && end > start) {\n    const candidate = t.slice(start, end + 1);\n    const parsed = safeJsonParse(candidate);\n    if (parsed && typeof parsed === 'object') return parsed;\n  }\n  return null;\n}\n\nfunction looksLikePostSchema(obj) {\n  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;\n  // چند کلید هسته‌ای که معمولاً همیشه هست\n  return (\n    typeof obj.title === 'string' ||\n    typeof obj.content === 'string' ||\n    typeof obj.excerpt === 'string' ||\n    typeof obj.slug === 'string'\n  );\n}\n\nfunction normalizeAnyShape(x) {\n  // حالت A: خود ورودی یک آبجکت آماده است\n  if (looksLikePostSchema(x)) return x;\n\n  // حالت B: ورودی آرایه است => آیتم اول\n  const root = Array.isArray(x) ? (x[0] || {}) : (x || {});\n\n  // اگر root خودش آماده است\n  if (looksLikePostSchema(root)) return root;\n\n  // حالت C: wrapper رایج { output: \"```json ...```\" }\n  if (root && typeof root.output === 'string') {\n    const parsed = extractFirstJson(root.output);\n    if (looksLikePostSchema(parsed) || (parsed && typeof parsed === 'object')) return parsed;\n  }\n\n  // حالت D: { output: { ... } }\n  if (root && root.output && typeof root.output === 'object' && !Array.isArray(root.output)) {\n    return root.output;\n  }\n\n  // حالت E: بعضی نودها { data: ... } یا { result: ... } میدن (اگر خواستی نگه داریم)\n  // این بخش اختیاریه ولی کمک می‌کنه:\n  if (root && root.data && typeof root.data === 'object' && !Array.isArray(root.data)) return root.data;\n  if (root && root.result && typeof root.result === 'object' && !Array.isArray(root.result)) return root.result;\n\n  // fallback خالی\n  return {};\n}\n\nconst normalized = normalizeAnyShape(input);\nreturn [{ json: normalized }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3296,
+        1072
+      ],
+      "id": "e82caa68-621a-47af-9b29-b89c130d2222",
+      "name": "Normalizer"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth Tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Initial Status": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sources & Add IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Sources & Add IDs": {
+      "main": [
+        [
+          {
+            "node": "Split Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sources": {
+      "main": [
+        [
+          {
+            "node": "RSS Feed Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Feed Read": {
+      "main": [
+        [
+          {
+            "node": "Tag Success/Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Success/Fail": {
+      "main": [
+        [
+          {
+            "node": "Status Per Source",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait for Loop to Finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Per Source": {
+      "main": [
+        [
+          {
+            "node": "If Has MsgID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has MsgID": {
+      "main": [
+        [
+          {
+            "node": "Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Loop to Finish": {
+      "main": [
+        [
+          {
+            "node": "Filter & Prepare All Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Prepare All Articles": {
+      "main": [
+        [
+          {
+            "node": "If Articles Exist",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check for Prep Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Prep Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Articles Exist": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Posts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Final Status (No Articles)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Posts": {
+      "main": [
+        [
+          {
+            "node": "Analyze SEO Performance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze SEO Performance": {
+      "main": [
+        [
+          {
+            "node": "AI Memory Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Memory Builder": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI JSON1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean URLs & Enhance Content": {
+      "main": [
+        [
+          {
+            "node": "Get Categories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Tags",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Series",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract Image URLs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Categories": {
+      "main": [
+        [
+          {
+            "node": "Select Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Category": {
+      "main": [
+        [
+          {
+            "node": "If Create Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Create Category": {
+      "main": [
+        [
+          {
+            "node": "Create Category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Existing Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Category": {
+      "main": [
+        [
+          {
+            "node": "Use Created Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Created Category": {
+      "main": [
+        [
+          {
+            "node": "Final Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Category": {
+      "main": [
+        [
+          {
+            "node": "Final Category",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Final Category": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tags": {
+      "main": [
+        [
+          {
+            "node": "Build Tag IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Tag IDs": {
+      "main": [
+        [
+          {
+            "node": "If Create Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Create Tag": {
+      "main": [
+        [
+          {
+            "node": "Add Field",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Existing Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tag": {
+      "main": [
+        [
+          {
+            "node": "Use Created Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Created Tag": {
+      "main": [
+        [
+          {
+            "node": "Final Tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Tag": {
+      "main": [
+        [
+          {
+            "node": "Final Tags",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Final Tags": {
+      "main": [
+        [
+          {
+            "node": "Collect Tag IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Series": {
+      "main": [
+        [
+          {
+            "node": "Select Series",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Series": {
+      "main": [
+        [
+          {
+            "node": "If Create Series",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Create Series": {
+      "main": [
+        [
+          {
+            "node": "Create Series",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Existing Series",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Series": {
+      "main": [
+        [
+          {
+            "node": "Use Created Series",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Created Series": {
+      "main": [
+        [
+          {
+            "node": "Final Series",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Series": {
+      "main": [
+        [
+          {
+            "node": "Final Series",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Blog Post Payload": {
+      "main": [
+        [
+          {
+            "node": "Create Blog Post1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Summary": {
+      "main": [
+        [
+          {
+            "node": "Update Final Status (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Image URLs": {
+      "main": [
+        [
+          {
+            "node": "AI Mdeia filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Images": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Create Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Media": {
+      "main": [
+        [
+          {
+            "node": "Collect Media Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Media Results": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Final Series": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Tag IDs": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Add Field": {
+      "main": [
+        [
+          {
+            "node": "Create Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Mdeia filter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Mdeia filter": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Split Out Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Blog Post1": {
+      "main": [
+        []
+      ]
+    },
+    "Parse AI JSON1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Original Article HTML1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Original Article HTML1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Auth Refresh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Tokens": {
+      "main": [
+        [
+          {
+            "node": "Send Initial Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Refresh": {
+      "main": [
+        [
+          {
+            "node": "Ai parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ai parser": {
+      "main": [
+        [
+          {
+            "node": "Clean URLs & Enhance Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Build Blog Post Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "bf48b037-8ccb-4d81-a3f6-4879ae9538c0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e9454ea9478c061d99a0e1cabdf5e316dde546b0101fb995715b05a70ccf445e"
+  },
+  "id": "EgAJhkBbMcWN8etU",
+  "tags": []
+}
